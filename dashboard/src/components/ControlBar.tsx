@@ -92,6 +92,7 @@ export function Notice() {
     c.blocked && `Automazione ferma: ${c.blocked}`,
     c.my_turn && "È il tuo turno: nessun agente parte finché non restituisci il checkout.",
     c.mode === "paused" && "Modalità in pausa: nessun agente parte.",
+    c.quiet && c.mode !== "paused" && `Ore di silenzio (${c.quiet_hours}): niente parte da solo, ma puoi avviare a mano.`,
   ].filter(Boolean) as string[]
   if (!lines.length) return null
   return (

@@ -2,10 +2,11 @@ import asyncio
 import json
 import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -41,6 +42,8 @@ class Control(BaseModel):
     mode: str | None = None
     my_turn: bool | None = None
     daily_budget_usd: float | None = None
+    quiet_hours: str | None = None
+    notifications: bool | None = None
 
 
 class TicketEdit(BaseModel):
@@ -91,25 +94,440 @@ class Setup(BaseModel):
     code: str
 
 
+@dataclass
+class Ctx:
+    """Everything one project needs: its config, tracker, engine and caches."""
+
+    cfg: ProjectConfig
+    project: str
+    db: Database
+    tracker: Any
+    engine: Engine
+    cache: dict[str, Any] = field(default_factory=lambda: {"at": 0.0, "tickets": [], "prs_at": 0.0, "prs": []})
+
+    def __post_init__(self) -> None:
+        self.engine.on_change = lambda: self.cache.update(at=0.0)
+
+
+def project_router(ctx: Ctx, require_session) -> APIRouter:
+    """All the routes that belong to one project; mounted once per project (see create_app)."""
+    cfg, project, db, tracker, engine, cache = ctx.cfg, ctx.project, ctx.db, ctx.tracker, ctx.engine, ctx.cache
+    r = APIRouter()
+
+    # ---- data ----------------------------------------------------------------------------
+    async def tickets(refresh: bool = False) -> list[Ticket]:
+        if refresh or time.time() - cache["at"] > TICKET_CACHE_SECONDS:
+            cache["tickets"] = await tracker.list_all()
+            cache["at"] = time.time()
+        return cache["tickets"]
+
+    def pending_approvals(run_id: int | None = None) -> list[dict]:
+        sql = (
+            "SELECT a.id, a.run_id, a.kind, a.title, a.detail, a.created_at, r.ticket_id, r.ticket_title, r.kind AS run_kind "
+            "FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.status = 'pending' AND r.project = ?"
+        )
+        rows = db.query(sql + (" AND a.run_id = ?" if run_id else "") + " ORDER BY a.id", (project, run_id) if run_id else (project,))
+        for r in rows:
+            r["detail"] = json.loads(r["detail"]) if r["detail"] else {}
+        return rows
+
+    def run_row(r: dict) -> dict:
+        r = dict(r)
+        r["cancel_requested"] = bool(r["cancel_requested"])
+        r["duration"] = (r["finished_at"] or time.time()) - r["started_at"]
+        return r
+
+    @r.get("/overview", dependencies=[Depends(require_session)])
+    async def overview(refresh: bool = False):
+        ts = await tickets(refresh)
+        counts: dict[str, int] = {}
+        for t in ts:
+            counts[t.status.value] = counts.get(t.status.value, 0) + 1
+        running = [run_row(r) for r in db.query("SELECT * FROM runs WHERE status = 'running' AND project = ? ORDER BY started_at", (project,))]
+        problems = [
+            run_row(r) for r in db.query(
+                "SELECT * FROM runs WHERE status IN ('failed','cancelled') AND project = ? AND started_at >= ? ORDER BY started_at DESC",
+                (project, time.time() - 24 * 3600),
+            )
+        ]
+        inbox = [
+            {"kind": "ticket", "state": t.status.value, "ticket": t.model_dump(include={"id", "title", "status", "area", "priority", "risk", "url", "pr_url", "branch", "agent_note", "updated_at"})}
+            for t in ts if t.status in INBOX_STATES
+        ]
+        return {
+            "project": project,
+            "spent_today": spent_today(db, project),
+            "daily_cap": daily_cap(db, cfg.limits.daily_budget_usd, project),
+            "ticket_cap": cfg.limits.budget_usd_per_ticket,
+            "counts": counts,
+            "running": running,
+            "recent_problems": problems,
+            "inbox": inbox,
+            "repo": {k: v for k, v in repo_state(cfg).items() if k in {"branch", "clean", "on_agent_branch"}},
+            "control": engine.state(),
+            "approvals": pending_approvals(),
+        }
+
+    @r.get("/tickets", dependencies=[Depends(require_session)])
+    async def list_tickets(refresh: bool = False):
+        ts = await tickets(refresh)
+        last = {
+            r["ticket_id"]: r for r in db.query(
+                "SELECT ticket_id, kind, status, outcome, started_at FROM runs WHERE id IN (SELECT MAX(id) FROM runs WHERE project = ? GROUP BY ticket_id)", (project,)
+            )
+        }
+        out = []
+        for t in ts:
+            d = t.model_dump(exclude={"body", "comments"})
+            d["last_run"] = last.get(t.id)
+            out.append(d)
+        return {"tickets": out, "fetched_at": cache["at"]}
+
+    @r.get("/tickets/{ticket_id}", dependencies=[Depends(require_session)])
+    async def ticket_detail(ticket_id: str):
+        try:
+            ticket, comments = await tracker.detail(ticket_id)
+        except Exception as e:
+            raise HTTPException(502, f"Notion non raggiungibile: {e}")
+        runs = [run_row(r) for r in db.query("SELECT * FROM runs WHERE ticket_id = ? AND project = ? ORDER BY started_at DESC", (ticket_id, project))]
+        actions = db.query("SELECT ts, actor, action, detail FROM actions WHERE ticket_id = ? ORDER BY id DESC LIMIT 30", (ticket_id,))
+        return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs, "actions": actions}
+
+    @r.get("/runs", dependencies=[Depends(require_session)])
+    def list_runs(limit: int = 50, ticket_id: str | None = None):
+        limit = max(1, min(limit, 200))
+        if ticket_id:
+            rows = db.query("SELECT * FROM runs WHERE ticket_id = ? AND project = ? ORDER BY started_at DESC LIMIT ?", (ticket_id, project, limit))
+        else:
+            rows = db.query("SELECT * FROM runs WHERE project = ? ORDER BY started_at DESC LIMIT ?", (project, limit))
+        return {"runs": [run_row(r) for r in rows]}
+
+    def events_for(run_id: int, after: int = 0) -> list[dict]:
+        rows = db.query("SELECT id, ts, type, text, data FROM events WHERE run_id = ? AND id > ? ORDER BY id", (run_id, after))
+        for r in rows:
+            r["data"] = json.loads(r["data"]) if r["data"] else None
+        return rows
+
+    @r.get("/runs/{run_id}", dependencies=[Depends(require_session)])
+    def run_detail(run_id: int):
+        row = db.one("SELECT * FROM runs WHERE id = ? AND project = ?", (run_id, project))
+        if not row:
+            raise HTTPException(404, "run non trovato")
+        control = engine.controls.get(run_id)
+        interactive = {"live": control is not None, "state": control.state if control else None, "approvals": pending_approvals(run_id)}
+        return {"run": run_row(row), "events": events_for(run_id), "interactive": interactive}
+
+    @r.get("/runs/{run_id}/stream", dependencies=[Depends(require_session)])
+    async def run_stream(run_id: int, request: Request):
+        if not db.one("SELECT id FROM runs WHERE id = ? AND project = ?", (run_id, project)):
+            raise HTTPException(404, "run non trovato")
+
+        async def gen():
+            last = int(request.headers.get("last-event-id") or 0)
+            while True:
+                for ev in events_for(run_id, last):
+                    last = ev["id"]
+                    yield f"id: {ev['id']}\nevent: event\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                status = db.one("SELECT status FROM runs WHERE id = ?", (run_id,))["status"]
+                if status != "running" and not events_for(run_id, last):
+                    yield f"event: end\ndata: {json.dumps({'status': status})}\n\n"
+                    return
+                if await request.is_disconnected():
+                    return
+                yield ": keepalive\n\n"
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    # ---- controls ------------------------------------------------------------------------
+    @r.get("/control", dependencies=[Depends(require_session)])
+    def control_state():
+        return engine.state()
+
+    @r.put("/control", dependencies=[Depends(require_session)])
+    def control_update(body: Control):
+        try:
+            if body.mode is not None:
+                engine.set_mode(body.mode)
+            if body.my_turn is not None:
+                engine.set_my_turn(body.my_turn)
+            if body.daily_budget_usd is not None:
+                engine.set_daily_cap(body.daily_budget_usd)
+            if body.quiet_hours is not None:
+                engine.set_quiet_hours(body.quiet_hours.strip())
+            if body.notifications is not None:
+                engine.set_notifications(body.notifications)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return engine.state()
+
+    @r.post("/control/stop-all", dependencies=[Depends(require_session)])
+    def stop_all():
+        return {"stopped": engine.stop()}
+
+    @r.post("/runs/{run_id}/cancel", dependencies=[Depends(require_session)])
+    def cancel_run(run_id: int):
+        row = db.one("SELECT status FROM runs WHERE id = ? AND project = ?", (run_id, project))
+        if not row:
+            raise HTTPException(404, "run non trovato")
+        if row["status"] != "running":
+            raise HTTPException(409, "il run è già terminato")
+        engine.stop(run_id)
+        return {"ok": True}
+
+    def live_control(run_id: int):
+        control = engine.controls.get(run_id)
+        if control is None:
+            raise HTTPException(409, "questo run non è interattivo (è terminato o è partito da terminale)")
+        return control
+
+    @r.post("/runs/{run_id}/message", dependencies=[Depends(require_session)])
+    async def message_run(run_id: int, body: Message):
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "il messaggio è vuoto")
+        await live_control(run_id).send(text)
+        row = db.one("SELECT ticket_id FROM runs WHERE id = ? AND project = ?", (run_id, project))
+        db.audit("user", "message", row["ticket_id"], text[:200])
+        return {"ok": True}
+
+    @r.post("/runs/{run_id}/pause", dependencies=[Depends(require_session)])
+    async def pause_run(run_id: int):
+        await live_control(run_id).pause()
+        return {"ok": True}
+
+    @r.get("/approvals", dependencies=[Depends(require_session)])
+    def list_approvals():
+        return {"approvals": pending_approvals()}
+
+    @r.post("/approvals/{approval_id}", dependencies=[Depends(require_session)])
+    def decide_approval(approval_id: int, body: Decision):
+        row = db.one("SELECT a.run_id, a.status, r.ticket_id FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.id = ? AND r.project = ?", (approval_id, project))
+        if not row:
+            raise HTTPException(404, "richiesta non trovata")
+        control = engine.controls.get(row["run_id"])
+        if row["status"] != "pending" or control is None or not control.decide(approval_id, body.decision, body.note):
+            raise HTTPException(409, "la richiesta non è più in attesa")
+        db.audit("user", "approval", row["ticket_id"], body.decision)
+        return {"ok": True}
+
+    @r.post("/tickets/{ticket_id}/start", dependencies=[Depends(require_session)])
+    async def start_job(ticket_id: str, body: StartJob):
+        try:
+            await engine.start(ticket_id, body.kind)
+        except Refused as e:
+            raise HTTPException(409, str(e))
+        except Exception as e:
+            raise HTTPException(502, f"Notion non raggiungibile: {e}")
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    @r.patch("/tickets/{ticket_id}", dependencies=[Depends(require_session)])
+    async def edit_ticket(ticket_id: str, body: TicketEdit):
+        changes = body.model_dump(exclude_none=True)
+        if not changes:
+            raise HTTPException(422, "nessuna modifica")
+        if "model" in changes and changes["model"] != "Auto" and changes["model"] not in cfg.model_choices:
+            raise HTTPException(422, f"modello sconosciuto: {changes['model']}")
+        if changes.get("attempts", 0) < 0:
+            raise HTTPException(422, "i tentativi non possono essere negativi")
+        try:
+            if "status" in changes:
+                await tracker.set_status(ticket_id, changes.pop("status"))
+            if changes:
+                await tracker.update(ticket_id, **changes)
+        except Exception as e:
+            raise HTTPException(502, f"Notion non ha accettato la modifica: {e}")
+        db.audit("user", "edit", ticket_id, json.dumps(body.model_dump(exclude_none=True), default=str))
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    @r.post("/tickets/{ticket_id}/comment", dependencies=[Depends(require_session)])
+    async def add_comment(ticket_id: str, body: CommentBody):
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "il commento è vuoto")
+        try:
+            await tracker.comment(ticket_id, text, as_human=True)
+        except Exception as e:
+            raise HTTPException(502, f"Notion non ha accettato il commento: {e}")
+        db.audit("user", "comment", ticket_id, text[:200])
+        return {"ok": True}
+
+    @r.get("/costs", dependencies=[Depends(require_session)])
+    def costs():
+        day = "strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime')"
+        since = time.time() - 30 * 24 * 3600
+        return {
+            "today": spent_today(db, project),
+            "daily_cap": daily_cap(db, cfg.limits.daily_budget_usd, project),
+            "ticket_cap": cfg.limits.budget_usd_per_ticket,
+            "total": (db.one("SELECT COALESCE(SUM(cost_usd),0) AS s FROM runs WHERE project = ?", (project,)) or {"s": 0})["s"],
+            "by_day": db.query(f"SELECT {day} AS day, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? AND started_at >= ? GROUP BY day ORDER BY day", (project, since)),
+            "by_model": db.query("SELECT COALESCE(model, 'n/d') AS model, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY model ORDER BY cost DESC", (project,)),
+            "by_kind": db.query("SELECT kind, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY kind", (project,)),
+            "by_ticket": db.query("SELECT ticket_id, ticket_title AS title, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY ticket_id ORDER BY cost DESC LIMIT 10", (project,)),
+        }
+
+    async def pulls(refresh: bool = False) -> list[dict]:
+        if not cfg.pr.slug:
+            return []
+        if refresh or time.time() - cache["prs_at"] > 30:
+            try:
+                cache["prs"] = await github.list_pulls(cfg, cfg.branch_prefix)
+            except Exception as e:
+                raise HTTPException(502, f"GitHub non raggiungibile: {e}")
+            cache["prs_at"] = time.time()
+        return cache["prs"]
+
+    async def merged_heads() -> set[str]:
+        try:
+            return {p["branch"] for p in await pulls() if p["state"] == "merged"}
+        except HTTPException:
+            return set()
+
+    @r.get("/prs", dependencies=[Depends(require_session)])
+    async def list_prs(refresh: bool = False):
+        prs = await pulls(refresh)
+        by_url = {t.pr_url: t for t in await tickets() if t.pr_url}
+        out = []
+        for p in prs:
+            t = by_url.get(p["url"])
+            out.append({**p, "ticket": t.model_dump(include={"id", "title", "risk", "verification", "agent_note", "status"}) if t else None})
+        return {"enabled": True, "prs": out}
+
+    @r.post("/prs/{number}/merge", dependencies=[Depends(require_session)])
+    async def merge_pr(number: int, body: Merge):
+        if not body.confirm:
+            raise HTTPException(422, "serve la conferma esplicita")
+        pr = next((p for p in await pulls(True) if p["number"] == number), None)
+        if not pr or pr["state"] != "open":
+            raise HTTPException(409, "la pull request non è aperta")
+        if pr["draft"]:
+            raise HTTPException(409, "la pull request è una bozza")
+        if pr["checks"] and pr["checks"]["verdict"] in ("failing", "pending"):
+            raise HTTPException(409, "i controlli su GitHub non sono passati: aspetta o correggi")
+        if pr["mergeable"] is False:
+            raise HTTPException(409, "ci sono conflitti con il branch di base")
+        ticket = next((t for t in await tickets() if t.pr_url == pr["url"]), None)
+        if ticket and ticket.risk == "Alto":
+            raise HTTPException(403, "rischio Alto: unisci a mano su GitHub dopo averla letta")
+        try:
+            await github.merge_pull(cfg, number, body.method)
+            if body.delete_branch:
+                await github.delete_remote_branch(cfg, pr["branch"])
+        except Exception as e:
+            raise HTTPException(502, f"GitHub ha rifiutato il merge: {e}")
+        if ticket:
+            await tracker.set_status(ticket.id, Status.CLOSED)
+        db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
+        cache["prs_at"] = 0.0
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    def checkout_guard() -> None:
+        if engine.busy():
+            raise HTTPException(409, "un agente sta lavorando sul checkout")
+
+    @r.get("/repo/diff", dependencies=[Depends(require_session)])
+    async def repo_diff(branch: str | None = None):
+        try:
+            return await asyncio.to_thread(repomod.diff, cfg, branch)
+        except RepoError as e:
+            raise HTTPException(404, str(e))
+
+    @r.post("/repo/checkout", dependencies=[Depends(require_session)])
+    async def repo_checkout(body: Checkout):
+        checkout_guard()
+        try:
+            await asyncio.to_thread(repomod.checkout, cfg, body.branch)
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        db.audit("user", "checkout", None, body.branch)
+        return {"ok": True}
+
+    @r.post("/repo/cleanup", dependencies=[Depends(require_session)])
+    async def repo_cleanup(body: Cleanup):
+        checkout_guard()
+        pr_merged = await merged_heads()
+        names = body.names if body.names is not None else await asyncio.to_thread(repomod.removable_branches, cfg, pr_merged)
+        try:
+            deleted = await asyncio.to_thread(repomod.delete_branches, cfg, names, pr_merged)
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        remote_deleted = []
+        if body.remote:
+            for name in deleted:
+                try:
+                    if await github.delete_remote_branch(cfg, name):
+                        remote_deleted.append(name)
+                except Exception:
+                    pass
+        db.audit("user", "cleanup", None, ", ".join(deleted))
+        return {"deleted": deleted, "remote_deleted": remote_deleted}
+
+    @r.post("/repo/checks", dependencies=[Depends(require_session)])
+    async def repo_checks():
+        try:
+            await engine.start_checks()
+        except Refused as e:
+            raise HTTPException(409, str(e))
+        return {"ok": True}
+
+    @r.get("/repo", dependencies=[Depends(require_session)])
+    async def repo():
+        state = await asyncio.to_thread(repo_state, cfg, await merged_heads())
+        state["busy"] = engine.busy()
+        return state
+
+    @r.get("/config", dependencies=[Depends(require_session)])
+    def config():
+        return {
+            "project": project,
+            "repo": cfg.repo,
+            "base_branch": cfg.base_branch,
+            "local_path": cfg.local_path,
+            "workspace_mode": cfg.workspace_mode,
+            "limits": cfg.limits.model_dump(),
+            "agents": {k: v.model_dump(include={"models", "max_turns"}) for k, v in cfg.agents.items()},
+            "model_choices": cfg.model_choices,
+            "pr_enabled": cfg.pr.create,
+            "has_checks": bool(cfg.checks),
+            "never_automerge": cfg.risk.never_automerge,
+            "daily_cap_effective": daily_cap(db, cfg.limits.daily_budget_usd, project),
+            "autonomy": cfg.autonomy.model_dump(),
+            "statuses": {k.value: v for k, v in cfg.tracker.status_map.items()},
+            "started_today": start_of_today(),
+        }
+
+
+    return r
+
+
 def create_app(
     cfg: ProjectConfig, project: str, db: Database, tracker: TrackerLike, *,
     static_dir: Path | None = DIST, engine: Engine | None = None, run_loop: bool = False,
+    others: list[Ctx] | None = None,
 ) -> FastAPI:
+    """One dashboard for one or more projects.
+
+    The first project is also served at /api/...; every project (that one included) lives at
+    /api/p/<name>/..., which is what the dashboard uses once it knows the project list.
+    """
     engine = engine or Engine(cfg, project, db, tracker)
+    contexts = [Ctx(cfg, project, db, tracker, engine), *(others or [])]
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        loop = asyncio.ensure_future(engine.run_forever()) if run_loop else None
+        loops = [asyncio.ensure_future(c.engine.run_forever()) for c in contexts] if run_loop else []
         yield
-        if loop:
+        for loop in loops:
             loop.cancel()
 
     app = FastAPI(title="autodev", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     auth = Auth(db)
     app.state.auth = auth
     app.state.engine = engine
-    cache: dict[str, Any] = {"at": 0.0, "tickets": [], "prs_at": 0.0, "prs": []}
-    engine.on_change = lambda: cache.update(at=0.0)
     mark_orphans(db)
 
     @app.middleware("http")
@@ -170,386 +588,28 @@ def create_app(
         response.delete_cookie(COOKIE, path="/")
         return {"ok": True}
 
-    # ---- data ----------------------------------------------------------------------------
-    async def tickets(refresh: bool = False) -> list[Ticket]:
-        if refresh or time.time() - cache["at"] > TICKET_CACHE_SECONDS:
-            cache["tickets"] = await tracker.list_all()
-            cache["at"] = time.time()
-        return cache["tickets"]
+    # ---- projects ------------------------------------------------------------------------
+    for c in contexts:
+        app.include_router(project_router(c, require_session), prefix=f"/api/p/{c.project}")
+    app.include_router(project_router(contexts[0], require_session), prefix="/api")
 
-    def pending_approvals(run_id: int | None = None) -> list[dict]:
-        sql = (
-            "SELECT a.id, a.run_id, a.kind, a.title, a.detail, a.created_at, r.ticket_id, r.ticket_title, r.kind AS run_kind "
-            "FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.status = 'pending'"
-        )
-        rows = db.query(sql + (" AND a.run_id = ?" if run_id else "") + " ORDER BY a.id", (run_id,) if run_id else ())
-        for r in rows:
-            r["detail"] = json.loads(r["detail"]) if r["detail"] else {}
-        return rows
+    @app.get("/api/projects", dependencies=[Depends(require_session)])
+    def list_projects():
+        def count(sql: str, name: str) -> int:
+            return db.one(sql, (name,))["n"]
 
-    def run_row(r: dict) -> dict:
-        r = dict(r)
-        r["cancel_requested"] = bool(r["cancel_requested"])
-        r["duration"] = (r["finished_at"] or time.time()) - r["started_at"]
-        return r
-
-    @app.get("/api/overview", dependencies=[Depends(require_session)])
-    async def overview(refresh: bool = False):
-        ts = await tickets(refresh)
-        counts: dict[str, int] = {}
-        for t in ts:
-            counts[t.status.value] = counts.get(t.status.value, 0) + 1
-        running = [run_row(r) for r in db.query("SELECT * FROM runs WHERE status = 'running' ORDER BY started_at")]
-        problems = [
-            run_row(r) for r in db.query(
-                "SELECT * FROM runs WHERE status IN ('failed','cancelled') AND started_at >= ? ORDER BY started_at DESC",
-                (time.time() - 24 * 3600,),
-            )
-        ]
-        inbox = [
-            {"kind": "ticket", "state": t.status.value, "ticket": t.model_dump(include={"id", "title", "status", "area", "priority", "risk", "url", "pr_url", "branch", "agent_note", "updated_at"})}
-            for t in ts if t.status in INBOX_STATES
-        ]
         return {
-            "project": project,
-            "spent_today": spent_today(db),
-            "daily_cap": daily_cap(db, cfg.limits.daily_budget_usd),
-            "ticket_cap": cfg.limits.budget_usd_per_ticket,
-            "counts": counts,
-            "running": running,
-            "recent_problems": problems,
-            "inbox": inbox,
-            "repo": {k: v for k, v in repo_state(cfg).items() if k in {"branch", "clean", "on_agent_branch"}},
-            "control": engine.state(),
-            "approvals": pending_approvals(),
-        }
-
-    @app.get("/api/tickets", dependencies=[Depends(require_session)])
-    async def list_tickets(refresh: bool = False):
-        ts = await tickets(refresh)
-        last = {
-            r["ticket_id"]: r for r in db.query(
-                "SELECT ticket_id, kind, status, outcome, started_at FROM runs WHERE id IN (SELECT MAX(id) FROM runs GROUP BY ticket_id)"
-            )
-        }
-        out = []
-        for t in ts:
-            d = t.model_dump(exclude={"body", "comments"})
-            d["last_run"] = last.get(t.id)
-            out.append(d)
-        return {"tickets": out, "fetched_at": cache["at"]}
-
-    @app.get("/api/tickets/{ticket_id}", dependencies=[Depends(require_session)])
-    async def ticket_detail(ticket_id: str):
-        try:
-            ticket, comments = await tracker.detail(ticket_id)
-        except Exception as e:
-            raise HTTPException(502, f"Notion non raggiungibile: {e}")
-        runs = [run_row(r) for r in db.query("SELECT * FROM runs WHERE ticket_id = ? ORDER BY started_at DESC", (ticket_id,))]
-        actions = db.query("SELECT ts, actor, action, detail FROM actions WHERE ticket_id = ? ORDER BY id DESC LIMIT 30", (ticket_id,))
-        return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs, "actions": actions}
-
-    @app.get("/api/runs", dependencies=[Depends(require_session)])
-    def list_runs(limit: int = 50, ticket_id: str | None = None):
-        limit = max(1, min(limit, 200))
-        if ticket_id:
-            rows = db.query("SELECT * FROM runs WHERE ticket_id = ? ORDER BY started_at DESC LIMIT ?", (ticket_id, limit))
-        else:
-            rows = db.query("SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,))
-        return {"runs": [run_row(r) for r in rows]}
-
-    def events_for(run_id: int, after: int = 0) -> list[dict]:
-        rows = db.query("SELECT id, ts, type, text, data FROM events WHERE run_id = ? AND id > ? ORDER BY id", (run_id, after))
-        for r in rows:
-            r["data"] = json.loads(r["data"]) if r["data"] else None
-        return rows
-
-    @app.get("/api/runs/{run_id}", dependencies=[Depends(require_session)])
-    def run_detail(run_id: int):
-        row = db.one("SELECT * FROM runs WHERE id = ?", (run_id,))
-        if not row:
-            raise HTTPException(404, "run non trovato")
-        control = engine.controls.get(run_id)
-        interactive = {"live": control is not None, "state": control.state if control else None, "approvals": pending_approvals(run_id)}
-        return {"run": run_row(row), "events": events_for(run_id), "interactive": interactive}
-
-    @app.get("/api/runs/{run_id}/stream", dependencies=[Depends(require_session)])
-    async def run_stream(run_id: int, request: Request):
-        if not db.one("SELECT id FROM runs WHERE id = ?", (run_id,)):
-            raise HTTPException(404, "run non trovato")
-
-        async def gen():
-            last = int(request.headers.get("last-event-id") or 0)
-            while True:
-                for ev in events_for(run_id, last):
-                    last = ev["id"]
-                    yield f"id: {ev['id']}\nevent: event\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
-                status = db.one("SELECT status FROM runs WHERE id = ?", (run_id,))["status"]
-                if status != "running" and not events_for(run_id, last):
-                    yield f"event: end\ndata: {json.dumps({'status': status})}\n\n"
-                    return
-                if await request.is_disconnected():
-                    return
-                yield ": keepalive\n\n"
-                await asyncio.sleep(0.5)
-
-        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
-
-    # ---- controls ------------------------------------------------------------------------
-    @app.get("/api/control", dependencies=[Depends(require_session)])
-    def control_state():
-        return engine.state()
-
-    @app.put("/api/control", dependencies=[Depends(require_session)])
-    def control_update(body: Control):
-        try:
-            if body.mode is not None:
-                engine.set_mode(body.mode)
-            if body.my_turn is not None:
-                engine.set_my_turn(body.my_turn)
-            if body.daily_budget_usd is not None:
-                engine.set_daily_cap(body.daily_budget_usd)
-        except ValueError as e:
-            raise HTTPException(422, str(e))
-        return engine.state()
-
-    @app.post("/api/control/stop-all", dependencies=[Depends(require_session)])
-    def stop_all():
-        return {"stopped": engine.stop()}
-
-    @app.post("/api/runs/{run_id}/cancel", dependencies=[Depends(require_session)])
-    def cancel_run(run_id: int):
-        row = db.one("SELECT status FROM runs WHERE id = ?", (run_id,))
-        if not row:
-            raise HTTPException(404, "run non trovato")
-        if row["status"] != "running":
-            raise HTTPException(409, "il run è già terminato")
-        engine.stop(run_id)
-        return {"ok": True}
-
-    def live_control(run_id: int):
-        control = engine.controls.get(run_id)
-        if control is None:
-            raise HTTPException(409, "questo run non è interattivo (è terminato o è partito da terminale)")
-        return control
-
-    @app.post("/api/runs/{run_id}/message", dependencies=[Depends(require_session)])
-    async def message_run(run_id: int, body: Message):
-        text = body.text.strip()
-        if not text:
-            raise HTTPException(422, "il messaggio è vuoto")
-        await live_control(run_id).send(text)
-        row = db.one("SELECT ticket_id FROM runs WHERE id = ?", (run_id,))
-        db.audit("user", "message", row["ticket_id"], text[:200])
-        return {"ok": True}
-
-    @app.post("/api/runs/{run_id}/pause", dependencies=[Depends(require_session)])
-    async def pause_run(run_id: int):
-        await live_control(run_id).pause()
-        return {"ok": True}
-
-    @app.get("/api/approvals", dependencies=[Depends(require_session)])
-    def list_approvals():
-        return {"approvals": pending_approvals()}
-
-    @app.post("/api/approvals/{approval_id}", dependencies=[Depends(require_session)])
-    def decide_approval(approval_id: int, body: Decision):
-        row = db.one("SELECT a.run_id, a.status, r.ticket_id FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.id = ?", (approval_id,))
-        if not row:
-            raise HTTPException(404, "richiesta non trovata")
-        control = engine.controls.get(row["run_id"])
-        if row["status"] != "pending" or control is None or not control.decide(approval_id, body.decision, body.note):
-            raise HTTPException(409, "la richiesta non è più in attesa")
-        db.audit("user", "approval", row["ticket_id"], body.decision)
-        return {"ok": True}
-
-    @app.post("/api/tickets/{ticket_id}/start", dependencies=[Depends(require_session)])
-    async def start_job(ticket_id: str, body: StartJob):
-        try:
-            await engine.start(ticket_id, body.kind)
-        except Refused as e:
-            raise HTTPException(409, str(e))
-        except Exception as e:
-            raise HTTPException(502, f"Notion non raggiungibile: {e}")
-        cache["at"] = 0.0
-        return {"ok": True}
-
-    @app.patch("/api/tickets/{ticket_id}", dependencies=[Depends(require_session)])
-    async def edit_ticket(ticket_id: str, body: TicketEdit):
-        changes = body.model_dump(exclude_none=True)
-        if not changes:
-            raise HTTPException(422, "nessuna modifica")
-        if "model" in changes and changes["model"] != "Auto" and changes["model"] not in cfg.model_choices:
-            raise HTTPException(422, f"modello sconosciuto: {changes['model']}")
-        if changes.get("attempts", 0) < 0:
-            raise HTTPException(422, "i tentativi non possono essere negativi")
-        try:
-            if "status" in changes:
-                await tracker.set_status(ticket_id, changes.pop("status"))
-            if changes:
-                await tracker.update(ticket_id, **changes)
-        except Exception as e:
-            raise HTTPException(502, f"Notion non ha accettato la modifica: {e}")
-        db.audit("user", "edit", ticket_id, json.dumps(body.model_dump(exclude_none=True), default=str))
-        cache["at"] = 0.0
-        return {"ok": True}
-
-    @app.post("/api/tickets/{ticket_id}/comment", dependencies=[Depends(require_session)])
-    async def add_comment(ticket_id: str, body: CommentBody):
-        text = body.text.strip()
-        if not text:
-            raise HTTPException(422, "il commento è vuoto")
-        try:
-            await tracker.comment(ticket_id, text, as_human=True)
-        except Exception as e:
-            raise HTTPException(502, f"Notion non ha accettato il commento: {e}")
-        db.audit("user", "comment", ticket_id, text[:200])
-        return {"ok": True}
-
-    @app.get("/api/costs", dependencies=[Depends(require_session)])
-    def costs():
-        day = "strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime')"
-        since = time.time() - 30 * 24 * 3600
-        return {
-            "today": spent_today(db),
-            "daily_cap": daily_cap(db, cfg.limits.daily_budget_usd),
-            "ticket_cap": cfg.limits.budget_usd_per_ticket,
-            "total": (db.one("SELECT COALESCE(SUM(cost_usd),0) AS s FROM runs") or {"s": 0})["s"],
-            "by_day": db.query(f"SELECT {day} AS day, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE started_at >= ? GROUP BY day ORDER BY day", (since,)),
-            "by_model": db.query("SELECT COALESCE(model, 'n/d') AS model, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs GROUP BY model ORDER BY cost DESC"),
-            "by_kind": db.query("SELECT kind, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs GROUP BY kind"),
-            "by_ticket": db.query("SELECT ticket_id, ticket_title AS title, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs GROUP BY ticket_id ORDER BY cost DESC LIMIT 10"),
-        }
-
-    async def pulls(refresh: bool = False) -> list[dict]:
-        if not cfg.pr.slug:
-            return []
-        if refresh or time.time() - cache["prs_at"] > 30:
-            try:
-                cache["prs"] = await github.list_pulls(cfg, cfg.branch_prefix)
-            except Exception as e:
-                raise HTTPException(502, f"GitHub non raggiungibile: {e}")
-            cache["prs_at"] = time.time()
-        return cache["prs"]
-
-    async def merged_heads() -> set[str]:
-        try:
-            return {p["branch"] for p in await pulls() if p["state"] == "merged"}
-        except HTTPException:
-            return set()
-
-    @app.get("/api/prs", dependencies=[Depends(require_session)])
-    async def list_prs(refresh: bool = False):
-        prs = await pulls(refresh)
-        by_url = {t.pr_url: t for t in await tickets() if t.pr_url}
-        out = []
-        for p in prs:
-            t = by_url.get(p["url"])
-            out.append({**p, "ticket": t.model_dump(include={"id", "title", "risk", "verification", "agent_note", "status"}) if t else None})
-        return {"enabled": True, "prs": out}
-
-    @app.post("/api/prs/{number}/merge", dependencies=[Depends(require_session)])
-    async def merge_pr(number: int, body: Merge):
-        if not body.confirm:
-            raise HTTPException(422, "serve la conferma esplicita")
-        pr = next((p for p in await pulls(True) if p["number"] == number), None)
-        if not pr or pr["state"] != "open":
-            raise HTTPException(409, "la pull request non è aperta")
-        if pr["draft"]:
-            raise HTTPException(409, "la pull request è una bozza")
-        if pr["checks"] and pr["checks"]["verdict"] in ("failing", "pending"):
-            raise HTTPException(409, "i controlli su GitHub non sono passati: aspetta o correggi")
-        if pr["mergeable"] is False:
-            raise HTTPException(409, "ci sono conflitti con il branch di base")
-        ticket = next((t for t in await tickets() if t.pr_url == pr["url"]), None)
-        if ticket and ticket.risk == "Alto":
-            raise HTTPException(403, "rischio Alto: unisci a mano su GitHub dopo averla letta")
-        try:
-            await github.merge_pull(cfg, number, body.method)
-            if body.delete_branch:
-                await github.delete_remote_branch(cfg, pr["branch"])
-        except Exception as e:
-            raise HTTPException(502, f"GitHub ha rifiutato il merge: {e}")
-        if ticket:
-            await tracker.set_status(ticket.id, Status.CLOSED)
-        db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
-        cache["prs_at"] = 0.0
-        cache["at"] = 0.0
-        return {"ok": True}
-
-    def checkout_guard() -> None:
-        if engine.busy():
-            raise HTTPException(409, "un agente sta lavorando sul checkout")
-
-    @app.get("/api/repo/diff", dependencies=[Depends(require_session)])
-    async def repo_diff(branch: str | None = None):
-        try:
-            return await asyncio.to_thread(repomod.diff, cfg, branch)
-        except RepoError as e:
-            raise HTTPException(404, str(e))
-
-    @app.post("/api/repo/checkout", dependencies=[Depends(require_session)])
-    async def repo_checkout(body: Checkout):
-        checkout_guard()
-        try:
-            await asyncio.to_thread(repomod.checkout, cfg, body.branch)
-        except RepoError as e:
-            raise HTTPException(409, str(e))
-        db.audit("user", "checkout", None, body.branch)
-        return {"ok": True}
-
-    @app.post("/api/repo/cleanup", dependencies=[Depends(require_session)])
-    async def repo_cleanup(body: Cleanup):
-        checkout_guard()
-        pr_merged = await merged_heads()
-        names = body.names if body.names is not None else await asyncio.to_thread(repomod.removable_branches, cfg, pr_merged)
-        try:
-            deleted = await asyncio.to_thread(repomod.delete_branches, cfg, names, pr_merged)
-        except RepoError as e:
-            raise HTTPException(409, str(e))
-        remote_deleted = []
-        if body.remote:
-            for name in deleted:
-                try:
-                    if await github.delete_remote_branch(cfg, name):
-                        remote_deleted.append(name)
-                except Exception:
-                    pass
-        db.audit("user", "cleanup", None, ", ".join(deleted))
-        return {"deleted": deleted, "remote_deleted": remote_deleted}
-
-    @app.post("/api/repo/checks", dependencies=[Depends(require_session)])
-    async def repo_checks():
-        try:
-            await engine.start_checks()
-        except Refused as e:
-            raise HTTPException(409, str(e))
-        return {"ok": True}
-
-    @app.get("/api/repo", dependencies=[Depends(require_session)])
-    async def repo():
-        state = await asyncio.to_thread(repo_state, cfg, await merged_heads())
-        state["busy"] = engine.busy()
-        return state
-
-    @app.get("/api/config", dependencies=[Depends(require_session)])
-    def config():
-        return {
-            "project": project,
-            "repo": cfg.repo,
-            "base_branch": cfg.base_branch,
-            "local_path": cfg.local_path,
-            "workspace_mode": cfg.workspace_mode,
-            "limits": cfg.limits.model_dump(),
-            "agents": {k: v.model_dump(include={"models", "max_turns"}) for k, v in cfg.agents.items()},
-            "model_choices": cfg.model_choices,
-            "pr_enabled": cfg.pr.create,
-            "has_checks": bool(cfg.checks),
-            "never_automerge": cfg.risk.never_automerge,
-            "daily_cap_effective": daily_cap(db, cfg.limits.daily_budget_usd),
-            "autonomy": cfg.autonomy.model_dump(),
-            "statuses": {k.value: v for k, v in cfg.tracker.status_map.items()},
-            "started_today": start_of_today(),
+            "default": project,
+            "projects": [
+                {
+                    "name": c.project,
+                    "repo": c.cfg.repo,
+                    "mode": c.engine.mode,
+                    "running": count("SELECT COUNT(*) AS n FROM runs WHERE status = 'running' AND project = ?", c.project),
+                    "waiting": count("SELECT COUNT(*) AS n FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.status = 'pending' AND r.project = ?", c.project),
+                }
+                for c in contexts
+            ],
         }
 
     # ---- static frontend -----------------------------------------------------------------

@@ -30,9 +30,10 @@ def remember_key(tool: str, tool_input: dict[str, Any]) -> str:
 
 
 class RunControl:
-    def __init__(self, db: Database, mode: Callable[[], str]):
+    def __init__(self, db: Database, mode: Callable[[], str], notify: Callable[[str, str], None] | None = None):
         self.db = db
         self.mode = mode
+        self.notify = notify or (lambda title, body: None)
         self.run_id: int | None = None
         self.client: Any = None
         self.cwd = "/"
@@ -98,6 +99,7 @@ class RunControl:
         self._futures[approval_id] = future
         previous, self.state = self.state, "approval"
         self.event(kind, title, {"approval_id": approval_id, **detail})
+        self.notify("autodev aspetta te" if kind == "permission" else "autodev: serve la tua approvazione", title)
         try:
             return await future
         finally:

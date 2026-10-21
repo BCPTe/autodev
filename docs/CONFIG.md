@@ -15,4 +15,6 @@ With a single file in `projects/`, `--project` can be omitted.
 | `checks`, `regressions`, `prepare`, `python` | How to verify a fix in that stack |
 | `limits`, `risk`, `model_choices`, `pr` | Budgets, risky paths, model names, pull requests |
 
+`autonomy`: `default_mode`, `poll_seconds`, `retry_cooldown_seconds`, `auto_approve_risks`, `checkpoints`, `quiet_hours`, `notify_command`, `auto_cleanup_branches` (see the README for what each does).
+
 Dashboard: `cd dashboard && npm install && npm run build`, then `uv run autodev serve`.

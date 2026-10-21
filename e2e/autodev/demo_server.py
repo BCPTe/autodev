@@ -20,7 +20,7 @@ from autodev.control import checkpoint, current_control  # noqa: E402
 from autodev.db import Database  # noqa: E402
 from autodev.engine import Engine  # noqa: E402
 from autodev.models import Comment, Status, Ticket  # noqa: E402
-from autodev.server.app import create_app  # noqa: E402
+from autodev.server.app import Ctx, create_app  # noqa: E402
 from tests.fixture_repo import make_project  # noqa: E402
 from tests.test_repo_ops import agent_branch, git  # noqa: E402
 from autodev import github  # noqa: E402
@@ -181,7 +181,11 @@ def main() -> None:
 
     github.list_pulls, github.merge_pull, github.delete_remote_branch = list_pulls, merge_pull, delete_remote_branch
     tracker = FakeTracker()
-    app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker))
+    other_cfg = cfg.model_copy(deep=True)
+    other_tracker = FakeTracker()
+    other_tracker._t = other_tracker._t[:3]
+    other = Ctx(other_cfg, "gestionale", db, other_tracker, Engine(other_cfg, "gestionale", db, other_tracker))
+    app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker), others=[other])
     print(f"SETUP_CODE={app.state.auth.setup_code}", flush=True)
 
     threading.Thread(target=lambda: asyncio.run(feed(db, live)), daemon=True).start()

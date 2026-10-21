@@ -8,8 +8,39 @@ export class ApiError extends Error {
 
 export const UNAUTHORIZED_EVENT = "autodev:unauthorized"
 
+const PROJECT_KEY = "autodev:project"
+let currentProject: string | null = null
+
+export function getProject(): string | null {
+  return currentProject
+}
+
+/** Remembers which project the dashboard is showing; every project-scoped call is routed to it. */
+export function setProject(name: string) {
+  currentProject = name
+  try {
+    localStorage.setItem(PROJECT_KEY, name)
+  } catch {
+    /* private mode: the default project is used next time */
+  }
+}
+
+export function storedProject(): string | null {
+  try {
+    return localStorage.getItem(PROJECT_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** /api/overview -> /api/p/<project>/overview; auth and project-list calls stay global. */
+export function scoped(path: string): string {
+  if (!currentProject || !path.startsWith("/api/") || path.startsWith("/api/auth/") || path.startsWith("/api/projects") || path.startsWith("/api/p/")) return path
+  return `/api/p/${encodeURIComponent(currentProject)}/${path.slice("/api/".length)}`
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(scoped(path), {
     credentials: "same-origin",
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -31,6 +62,14 @@ export const post = <T,>(path: string, body: unknown) => api<T>(path, { method: 
 export const put = <T,>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) })
 export const patch = <T,>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) })
 
+export interface ProjectInfo {
+  name: string
+  repo: string
+  mode: Mode
+  running: number
+  waiting: number
+}
+
 export type Mode = "auto" | "supervised" | "manual" | "paused"
 
 export interface Control {
@@ -45,6 +84,10 @@ export interface Control {
   auto_approve_risks: string[]
   poll_seconds: number
   next_check: number | null
+  quiet_hours: string | null
+  quiet: boolean
+  notifications: boolean
+  can_notify: boolean
 }
 
 export interface TicketAction {

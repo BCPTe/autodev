@@ -134,7 +134,7 @@ async def test_fix_needs_the_ticket_to_be_approved_first(tmp_path, fakes):
 async def test_daily_cap_blocks_starts(tmp_path, fakes):
     e, db, _ = make(tmp_path, [ticket("a", Status.NEW)])
     e.set_daily_cap(1.0)
-    db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, cost_usd) VALUES('p','z','z','fix','done',?,1.5)", (__import__("time").time(),))
+    db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, cost_usd) VALUES('demo','z','z','fix','done',?,1.5)", (__import__("time").time(),))
     with pytest.raises(Refused, match="tetto giornaliero"):
         await e.start("a", "triage")
     assert "tetto giornaliero" in e.state()["blocked"]
@@ -202,3 +202,103 @@ async def test_stop_cancels_the_running_job(tmp_path, fakes):
     await asyncio.wait_for(e.wait_idle(), timeout=5)
     assert db.one("SELECT status FROM runs")["status"] == "cancelled"
     assert e.stop() == 0
+
+
+# ---- phase 5: quiet hours, notifications, housekeeping, projects ---------------------------------
+import datetime as dt
+
+from autodev import github
+
+
+def at(hour, minute=0):
+    return dt.datetime(2026, 10, 21, hour, minute).timestamp()
+
+
+@pytest.mark.parametrize("spec,hour,expected", [
+    ("22:00-07:00", 23, True), ("22:00-07:00", 3, True), ("22:00-07:00", 7, False), ("22:00-07:00", 12, False),
+    ("09:00-17:00", 12, True), ("09:00-17:00", 17, False), ("09:00-17:00", 8, False), (None, 3, False), ("garbage", 3, False),
+])
+def test_quiet_hours_window_may_cross_midnight(spec, hour, expected):
+    assert engine_mod.in_quiet_hours(spec, at(hour)) is expected
+
+
+async def test_nothing_starts_by_itself_during_quiet_hours_but_a_manual_start_works(tmp_path, fakes):
+    calls, _ = fakes
+    e, _, _ = make(tmp_path, [ticket("a", Status.NEW)])
+    e._clock = lambda: at(23)
+    e.set_mode("supervised")
+    e.set_quiet_hours("22:00-07:00")
+    assert e.state()["quiet"] is True
+    assert await e.tick() is None and calls == []
+    await e.start("a", "triage")
+    await e.wait_idle()
+    assert calls == [("triage", "a")]
+    e._clock = lambda: at(8)
+    assert e.state()["quiet"] is False
+
+
+def test_quiet_hours_set_in_the_dashboard_override_the_project_file(tmp_path):
+    e, _, _ = make(tmp_path, [], quiet_hours="22:00-07:00")
+    assert e.quiet_hours == "22:00-07:00"
+    e.set_quiet_hours("")
+    assert e.quiet_hours is None
+    with pytest.raises(ValueError):
+        e.set_quiet_hours("night")
+
+
+async def test_finished_runs_and_requests_raise_a_desktop_notification(tmp_path, fakes, desktop_notifications):
+    e, _, _ = make(tmp_path, [ticket("a", Status.NEW)])
+    await e.start("a", "triage")
+    await e.wait_idle()
+    assert len(desktop_notifications) == 1
+    assert desktop_notifications[0][-2:] == ["autodev: triage finito", "[demo] Ticket a: analizzato, aspetta il tuo ok"]
+    e.set_notifications(False)
+    e.notify("x", "y")
+    assert len(desktop_notifications) == 1
+
+
+async def test_a_merged_pull_request_closes_its_ticket_and_a_closed_one_escalates_it(tmp_path, monkeypatch):
+    e, db, tracker = make(tmp_path, [
+        ticket("m", Status.REVIEW, pr_url="https://gh/pull/1"),
+        ticket("c", Status.REVIEW, pr_url="https://gh/pull/2"),
+        ticket("o", Status.REVIEW, pr_url="https://gh/pull/3"),
+        ticket("x", Status.ANALYZED, pr_url="https://gh/pull/1"),
+    ])
+    e.cfg.pr.slug = "o/r"
+
+    async def list_pulls(cfg, prefix, limit=30):
+        return [{"url": f"https://gh/pull/{n}", "number": n, "state": s, "branch": f"autodev/b{n}"} for n, s in ((1, "merged"), (2, "closed"), (3, "open"))]
+
+    monkeypatch.setattr(github, "list_pulls", list_pulls)
+    assert sorted(await e.housekeeping()) == ["c", "m"]
+    assert (tracker.tickets["m"].status, tracker.tickets["c"].status, tracker.tickets["o"].status, tracker.tickets["x"].status) == (
+        Status.CLOSED, Status.ESCALATED, Status.REVIEW, Status.ANALYZED)
+    assert "chiusa senza essere unita" in tracker.tickets["c"].agent_note
+    assert {r["action"] for r in db.query("SELECT action FROM actions")} == {"merged", "pr_closed"}
+
+
+async def test_housekeeping_does_nothing_when_github_is_unreachable(tmp_path, monkeypatch):
+    e, _, tracker = make(tmp_path, [ticket("m", Status.REVIEW, pr_url="https://gh/pull/1")])
+    e.cfg.pr.slug = "o/r"
+
+    async def broken(cfg, prefix, limit=30):
+        raise RuntimeError("GITHUB_TOKEN mancante")
+
+    monkeypatch.setattr(github, "list_pulls", broken)
+    assert await e.housekeeping() == []
+    assert tracker.tickets["m"].status == Status.REVIEW
+
+
+async def test_projects_keep_separate_modes_caps_and_busy_state(tmp_path, fakes):
+    db = Database(tmp_path / "p.db")
+    a = Engine(CFG, "alpha", db, Tracker([ticket("a", Status.NEW)]))
+    b = Engine(CFG, "beta", db, Tracker([ticket("b", Status.NEW)]))
+    a.set_mode("auto")
+    a.set_daily_cap(3)
+    assert (a.mode, b.mode) == ("auto", "manual")
+    assert (a.state()["daily_cap"], b.state()["daily_cap"]) == (3, CFG.limits.daily_budget_usd)
+    await a.start("a", "triage")
+    assert a.busy() and not b.busy()
+    await a.wait_idle()
+    db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, cost_usd) VALUES('alpha','z','z','fix','done',?,9)", (__import__("time").time(),))
+    assert a.state()["spent_today"] >= 9 and b.state()["spent_today"] == 0

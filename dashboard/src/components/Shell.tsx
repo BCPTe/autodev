@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { ModeSwitch, MyTurn, Notice, StopAll } from "@/components/ControlBar"
 import { Lamp } from "@/components/Lamp"
 import { TicketSheet } from "@/components/TicketSheet"
-import { useOverview } from "@/hooks/queries"
-import { post } from "@/lib/api"
+import { useOverview, useProjects } from "@/hooks/queries"
+import { useAttention } from "@/hooks/useAttention"
+import { getProject, post, setProject } from "@/lib/api"
 import { money } from "@/lib/format"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -58,7 +59,30 @@ function Agents() {
   )
 }
 
+function ProjectSwitch() {
+  const { data } = useProjects()
+  if (!data || data.projects.length < 2) return null
+  const current = getProject()
+  return (
+    <label className="mx-4 mb-2 block text-xs text-muted-foreground">
+      Progetto
+      <select
+        className="mt-1 block h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground"
+        value={current ?? data.default}
+        onChange={(e) => { setProject(e.target.value); window.location.assign("/") }}
+      >
+        {data.projects.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}{p.waiting ? ` · ${p.waiting} in attesa` : p.running ? " · al lavoro" : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 export function Shell() {
+  useAttention()
   const { setTheme } = useTheme()
   const qc = useQueryClient()
   const logout = async () => {
@@ -75,6 +99,7 @@ export function Shell() {
           <BookOpenCheck className="size-5 text-primary" aria-hidden />
           <span className="font-display text-xl font-semibold">autodev</span>
         </div>
+        <ProjectSwitch />
         <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible" aria-label="Sezioni">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink

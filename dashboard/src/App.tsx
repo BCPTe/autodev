@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tan
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Shell } from "@/components/Shell"
-import { api, UNAUTHORIZED_EVENT } from "@/lib/api"
+import { api, setProject, storedProject, UNAUTHORIZED_EVENT, type ProjectInfo } from "@/lib/api"
 import { ThemeProvider } from "@/lib/theme"
 import { Costs } from "@/pages/Costs"
 import { Login } from "@/pages/Login"
@@ -40,6 +40,22 @@ function Gate() {
     )
   }
   if (!data.authenticated) return <Login setupRequired={data.setup_required} onDone={() => qc.invalidateQueries({ queryKey: ["auth"] })} />
+
+  return <Routed />
+}
+
+function Routed() {
+  const { data } = useQuery({
+    queryKey: ["projects-boot"],
+    staleTime: Infinity,
+    queryFn: async () => {
+      const list = await api<{ default: string; projects: ProjectInfo[] }>("/api/projects")
+      const stored = storedProject()
+      setProject(list.projects.some((p) => p.name === stored) ? stored! : list.default)
+      return list
+    },
+  })
+  if (!data) return null
 
   return (
     <BrowserRouter>

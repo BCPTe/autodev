@@ -83,6 +83,12 @@ class Autonomy(BaseModel):
     # Points where a run waits for a human (never in auto mode): "after_agent" = the agent says it is
     # done, before the verification gate; "before_pr" = verified, before the push and the pull request.
     checkpoints: list[Literal["after_agent", "before_pr"]] = ["before_pr"]
+    # "22:00-07:00": nothing starts by itself in these hours (a manual Start still works). None = always on.
+    quiet_hours: str | None = None
+    # Desktop notifications: argv with {title} and {body}; None = notify-send when available.
+    notify_command: list[str] | None = None
+    # When a pull request is merged, also delete its local branch.
+    auto_cleanup_branches: bool = False
 
 
 class ProjectConfig(BaseModel):

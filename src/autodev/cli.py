@@ -152,17 +152,30 @@ async def cleanup(project: str, remote: bool, dry_run: bool, workspaces: bool) -
     return 0
 
 
-def serve(project: str, port: int) -> int:
+def serve(projects: list[str], port: int) -> int:
+    """Serves the dashboard for the given projects, or for every file in projects/ when none is named."""
     import uvicorn
 
-    from autodev.server.app import create_app
+    from autodev.engine import Engine
+    from autodev.server.app import Ctx, create_app
 
-    cfg = load_project(f"projects/{project}.yaml")
     token = os.environ.get("NOTION_TOKEN")
     if not token:
         print("NOTION_TOKEN missing in .env")
         return 1
-    app = create_app(cfg, project, Database(), NotionTracker(cfg.tracker, token), run_loop=True)
+    names = projects or sorted(p.stem for p in Path("projects").glob("*.yaml"))
+    if not names:
+        print("nessun progetto in projects/")
+        return 1
+    db = Database()
+
+    def context(name: str) -> Ctx:
+        cfg = load_project(f"projects/{name}.yaml")
+        tracker = NotionTracker(cfg.tracker, token)
+        return Ctx(cfg, name, db, tracker, Engine(cfg, name, db, tracker))
+
+    first, *rest = (context(n) for n in names)
+    app = create_app(first.cfg, first.project, db, first.tracker, engine=first.engine, run_loop=True, others=rest)
     code = app.state.auth.setup_code
     print(f"\nautodev dashboard: http://localhost:{port}")
     if code:
@@ -195,10 +208,11 @@ def main() -> None:
     cl.add_argument("--dry-run", action="store_true")
     cl.add_argument("--workspaces", action="store_true", help="also remove leftover clones in workspaces/")
     sv = sub.add_parser("serve", help="start the local dashboard")
-    sv.add_argument("--project", default=None)
+    sv.add_argument("--project", action="append", default=[], help="repeatable; default: every file in projects/")
     sv.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    args.project = args.project or default_project()
+    if args.cmd != "serve":
+        args.project = args.project or default_project()
     if args.cmd == "check":
         sys.exit(asyncio.run(check(args.project)))
     if args.cmd == "cleanup":

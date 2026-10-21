@@ -97,7 +97,7 @@ def test_branch_checkout_and_cleanup_go_through_the_guards(env):
 
 def test_repo_changes_are_refused_while_an_agent_works(env):
     c, cfg, db, *_ = env
-    db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at) VALUES('p','x','x','fix','running',strftime('%s','now'))")
+    db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at) VALUES('shop','x','x','fix','running',strftime('%s','now'))")
     assert c.post("/api/repo/checkout", json={"branch": "main"}).status_code == 409
     assert c.post("/api/repo/cleanup", json={}).status_code == 409
     assert c.post("/api/repo/checks", json={}).status_code == 409

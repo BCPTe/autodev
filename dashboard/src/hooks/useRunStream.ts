@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import type { RunEvent } from "@/lib/api"
+import { scoped, type RunEvent } from "@/lib/api"
 
 /** Follows a run through Server-Sent Events: replays what already happened, then tails new events. */
 export function useRunStream(runId: number) {
@@ -11,7 +11,7 @@ export function useRunStream(runId: number) {
   useEffect(() => {
     setEvents([])
     setEnded(false)
-    const es = new EventSource(`/api/runs/${runId}/stream`)
+    const es = new EventSource(scoped(`/api/runs/${runId}/stream`))
     es.addEventListener("event", (e) => {
       const ev = JSON.parse((e as MessageEvent).data) as RunEvent
       setEvents((prev) => (prev.some((p) => p.id === ev.id) ? prev : [...prev, ev]))

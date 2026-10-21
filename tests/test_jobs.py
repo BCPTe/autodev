@@ -88,7 +88,7 @@ async def test_the_cap_set_in_the_dashboard_overrides_the_config_default(db):
     async def work(report):
         return {"outcome": "ok", "cost": 1.0}
 
-    db.set_setting("daily_budget_usd", "1")
+    db.set_setting("p:daily_budget_usd", "1")
     await run_tracked(db, project="p", ticket=TICKET, kind="fix", work=work, summarize=summary, daily_cap_usd=100)
     with pytest.raises(DailyCapReached):
         await run_tracked(db, project="p", ticket=TICKET, kind="fix", work=work, summarize=summary, daily_cap_usd=100)

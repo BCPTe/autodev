@@ -42,13 +42,15 @@ def start_of_today() -> float:
     return datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
-def spent_today(db: Database) -> float:
-    row = db.one("SELECT COALESCE(SUM(cost_usd), 0) AS s FROM runs WHERE started_at >= ?", (start_of_today(),))
+def spent_today(db: Database, project: str | None = None) -> float:
+    where, params = (" AND project = ?", (project,)) if project else ("", ())
+    row = db.one(f"SELECT COALESCE(SUM(cost_usd), 0) AS s FROM runs WHERE started_at >= ?{where}", (start_of_today(), *params))
     return float(row["s"]) if row else 0.0
 
 
-def daily_cap(db: Database, default: float) -> float:
-    return float(db.get_setting("daily_budget_usd", str(default)) or default)
+def daily_cap(db: Database, default: float, project: str | None = None) -> float:
+    key = f"{project}:daily_budget_usd" if project else "daily_budget_usd"
+    return float(db.get_setting(key, str(default)) or default)
 
 
 def add_event(db: Database, run_id: int, type_: str, text: str = "", data: dict | None = None) -> int:
@@ -96,8 +98,8 @@ async def run_tracked(
     echo: Report | None = None,
     launched: Callable[[int], None] | None = None,
 ) -> T:
-    spent = spent_today(db)
-    cap = daily_cap(db, daily_cap_usd)
+    spent = spent_today(db, project)
+    cap = daily_cap(db, daily_cap_usd, project)
     if spent >= cap:
         raise DailyCapReached(f"tetto giornaliero raggiunto (${spent:.2f} su ${cap:.2f})")
 

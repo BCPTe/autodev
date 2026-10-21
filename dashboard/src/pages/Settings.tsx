@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
 import { put } from "@/lib/api"
+import { browserNotificationsOn, setBrowserNotifications } from "@/hooks/useAttention"
 import { MODES } from "@/components/ControlBar"
 import { money, shortModel } from "@/lib/format"
 
@@ -32,6 +33,41 @@ function DailyCap({ current }: { current: number }) {
   )
 }
 
+function QuietHours({ current }: { current: string | null }) {
+  const { act, pending } = useAct()
+  const [value, setValue] = useState(current ?? "")
+  const valid = value === "" || /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(value)
+  return (
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { quiet_hours: value }), value ? "Ore di silenzio salvate" : "Ore di silenzio tolte") }}>
+      <Input aria-label="Ore di silenzio" className="h-8 w-36 font-mono" placeholder="22:00-07:00" value={value} onChange={(e) => setValue(e.target.value)} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || value === (current ?? "")}>Salva</Button>
+      <span className="text-xs text-muted-foreground">Vuoto = sempre attivo. In queste ore niente parte da solo.</span>
+    </form>
+  )
+}
+
+function Notifications({ server, canNotify }: { server: boolean; canNotify: boolean }) {
+  const { act, pending } = useAct()
+  const [browser, setBrowser] = useState(browserNotificationsOn())
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2">
+        <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={server} disabled={pending || !canNotify} onChange={(e) => act(() => put("/api/control", { notifications: e.target.checked }), e.target.checked ? "Notifiche del desktop attive" : "Notifiche del desktop spente")} />
+        Notifiche del desktop {!canNotify && <span className="text-xs text-muted-foreground">(serve <code>notify-send</code> o <code>autonomy.notify_command</code>)</span>}
+      </label>
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          className="size-4 accent-[var(--primary)]"
+          checked={browser}
+          onChange={async (e) => setBrowser(await setBrowserNotifications(e.target.checked))}
+        />
+        Notifiche del browser <span className="text-xs text-muted-foreground">(solo a scheda aperta in secondo piano)</span>
+      </label>
+    </div>
+  )
+}
+
 export function Settings() {
   const { data: c, isLoading } = useConfig()
   const { data: overview } = useOverview()
@@ -50,6 +86,8 @@ export function Settings() {
           <Row label="Controllo del tabellone">Ogni {c.autonomy.poll_seconds} secondi (in Auto e Supervisionato)</Row>
           <Row label="Nuovo tentativo dopo un errore">Dopo {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minuti, oppure a mano</Row>
           <Row label="Punti di approvazione">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "dopo l'agente, prima delle verifiche" : "prima della pull request")).join("; ") + " (non in modalità Auto)" : "Nessuno"}</Row>
+          <Row label="Ore di silenzio">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
+          <Row label="Notifiche">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
           <Row label="Tetto giornaliero"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
         </dl>
 

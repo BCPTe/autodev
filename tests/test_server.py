@@ -214,7 +214,7 @@ def test_costs_aggregate_by_day_model_kind_and_ticket(client, env):
 
 def test_the_daily_cap_edited_in_settings_is_what_the_overview_shows(client, env):
     _, db, *_ = env
-    db.set_setting("daily_budget_usd", "7.5")
+    db.set_setting("demo:daily_budget_usd", "7.5")
     assert client.get("/api/overview").json()["daily_cap"] == 7.5
 
 
@@ -355,3 +355,56 @@ def test_pending_approvals_are_listed_and_decided_through_the_live_control(clien
     assert client.post(f"/api/approvals/{listed[0]['id']}", json={"decision": "deny"}).status_code == 409
     assert client.get("/api/approvals").json()["approvals"] == []
     loop.close()
+
+
+# ---- several projects -----------------------------------------------------------------------
+def test_each_project_has_its_own_tickets_runs_and_controls(tmp_path):
+    from autodev.engine import Engine
+    from autodev.server.app import Ctx
+
+    db = Database(tmp_path / "m.db")
+    alpha, beta = FakeTracker(), FakeTracker()
+    beta.tickets = [Ticket(id="b1", title="Beta bug", status=Status.NEW)]
+    other = Ctx(CFG, "beta", db, beta, Engine(CFG, "beta", db, beta))
+    app = create_app(CFG, "alpha", db, alpha, static_dir=None, others=[other])
+    c = TestClient(app)
+    c.post("/api/auth/setup", json={"password": PASSWORD, "code": app.state.auth.setup_code})
+    seed_run(db, project="alpha", ticket_id="t1")
+    seed_run(db, project="beta", ticket_id="b1", status="running", finished_at=None)
+
+    listing = c.get("/api/projects").json()
+    assert listing["default"] == "alpha"
+    assert [(p["name"], p["running"]) for p in listing["projects"]] == [("alpha", 0), ("beta", 1)]
+    assert [t["id"] for t in c.get("/api/p/beta/tickets").json()["tickets"]] == ["b1"]
+    assert [t["id"] for t in c.get("/api/p/alpha/tickets").json()["tickets"]] == ["t1", "t2", "t3"]
+    assert [t["id"] for t in c.get("/api/tickets").json()["tickets"]] == ["t1", "t2", "t3"]  # default project
+    assert [r["ticket_id"] for r in c.get("/api/p/beta/runs").json()["runs"]] == ["b1"]
+    assert [r["ticket_id"] for r in c.get("/api/p/alpha/runs").json()["runs"]] == ["t1"]
+
+    c.put("/api/p/beta/control", json={"mode": "auto", "daily_budget_usd": 3})
+    assert c.get("/api/p/alpha/control").json()["mode"] == "manual"
+    assert c.get("/api/p/beta/control").json()["mode"] == "auto"
+    assert c.get("/api/p/beta/overview").json()["daily_cap"] == 3
+    assert c.get("/api/p/alpha/overview").json()["daily_cap"] == CFG.limits.daily_budget_usd
+
+
+def test_a_run_of_another_project_cannot_be_reached_through_this_one(tmp_path):
+    from autodev.engine import Engine
+    from autodev.server.app import Ctx
+
+    db = Database(tmp_path / "m.db")
+    other = Ctx(CFG, "beta", db, FakeTracker(), Engine(CFG, "beta", db, FakeTracker()))
+    app = create_app(CFG, "alpha", db, FakeTracker(), static_dir=None, others=[other])
+    c = TestClient(app)
+    c.post("/api/auth/setup", json={"password": PASSWORD, "code": app.state.auth.setup_code})
+    run_id = seed_run(db, project="beta", ticket_id="b1", status="running", finished_at=None)
+    assert c.get(f"/api/p/alpha/runs/{run_id}").status_code == 404
+    assert c.post(f"/api/p/alpha/runs/{run_id}/cancel", json={}).status_code == 404
+    assert c.get(f"/api/p/beta/runs/{run_id}").status_code == 200
+
+
+def test_quiet_hours_and_notifications_are_set_through_the_control_endpoint(client):
+    s = client.put("/api/control", json={"quiet_hours": "22:00-07:00", "notifications": False}).json()
+    assert (s["quiet_hours"], s["notifications"]) == ("22:00-07:00", False)
+    assert client.put("/api/control", json={"quiet_hours": "notte"}).status_code == 422
+    assert client.put("/api/control", json={"quiet_hours": ""}).json()["quiet_hours"] is None

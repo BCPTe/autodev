@@ -61,6 +61,13 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Pull request:** autodev's PRs with GitHub check status, the ticket's risk and verification, and the PR description with the evidence. **Unisci** (squash) needs a second click and is refused for drafts, failing or pending checks, conflicts and Alto risk; a merge closes the ticket and deletes the remote branch.
 - Branches whose PR was merged (even squashed) count as merged. `uv run autodev cleanup [--dry-run] [--remote] [--workspaces]` deletes them from the terminal; unmerged branches are never removed.
 
+### Running unattended
+
+- **Quiet hours** (`autonomy.quiet_hours: "22:00-07:00"`, editable in Impostazioni): nothing starts by itself in that window; a manual Start still works.
+- **Notifications:** a desktop notification (via `notify-send`, or `autonomy.notify_command` with `{title}` and `{body}`) when a request or checkpoint waits for you, a run finishes or fails, the daily cap is reached or a PR is merged. The browser tab title shows the number of pending requests, and optional browser notifications work while the tab is open in the background.
+- **Housekeeping:** every polling round a merged PR closes its ticket and a PR closed unmerged escalates it (`autonomy.auto_cleanup_branches: true` also deletes the merged local branch).
+- **Several projects:** `uv run autodev serve` serves every file in `projects/` (or the ones named with `--project`, repeatable). A project switcher appears in the sidebar; mode, daily cap, quiet hours, runs and costs are per project, and each project's agent works on its own checkout.
+
 ## Layout
 
 ```
