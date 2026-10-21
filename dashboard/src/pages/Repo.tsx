@@ -33,7 +33,7 @@ export function Repo() {
           </Button>
         )}
         {config?.has_checks && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Esegue i controlli del progetto (test, typecheck) sul codice com'è ora"} onClick={() => act(() => post("/api/repo/checks", {}), "Controlli avviati: guarda Esecuzioni")}>
+          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Esegue i controlli del progetto (test, typecheck) sul codice com'è ora"} onClick={() => act(() => post("/api/repo/checks", {}), "Controlli avviati: guarda Attività")}>
             <FlaskConical /> Esegui i controlli
           </Button>
         )}
@@ -61,7 +61,7 @@ export function Repo() {
           <p className="font-display text-xl tabular-nums">{r.ahead ?? "?"} avanti · {r.behind ?? "?"} indietro</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Agente sul checkout</p>
+          <p className="text-xs text-muted-foreground">Agente al lavoro</p>
           <p className="flex items-center gap-2 text-[15px]"><Lamp kind={r.busy ? "violet" : "idle"} live={r.busy} />{r.busy ? "Un fix è in corso" : "Libero"}</p>
         </div>
       </section>
@@ -90,7 +90,7 @@ export function Repo() {
                 <TableRow>
                   <TableHead>Branch</TableHead>
                   <TableHead>Stato</TableHead>
-                  <TableHead className="text-right">Commit avanti</TableHead>
+                  <TableHead className="text-right">Commit in più</TableHead>
                   <TableHead>Ultimo commit</TableHead>
                   <TableHead>Aggiornato</TableHead>
                   <TableHead><span className="sr-only">Azioni</span></TableHead>

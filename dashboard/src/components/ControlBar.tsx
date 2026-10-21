@@ -56,7 +56,7 @@ export function MyTurn() {
       title={on ? "Stai lavorando nel checkout: gli agenti aspettano. Premi per restituirlo" : "Prendi il checkout: finché non lo restituisci nessun agente parte"}
       onClick={() => act(() => put("/api/control", { my_turn: !on }), on ? "Checkout restituito agli agenti" : "Il checkout è tuo")}
     >
-      <Hand /> {on ? "Turno tuo" : "Il mio turno"}
+      <Hand /> {on ? "Checkout tuo" : "Checkout a me"}
     </Button>
   )
 }

@@ -66,7 +66,7 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
                 <Lamp kind={list.length ? meta.lamp : "idle"} className="translate-y-px" />
                 <h3 className="text-base font-semibold">{meta.label}</h3>
                 <span className="font-display text-xl tabular-nums text-muted-foreground">{list.length}</span>
-                <span className="text-xs text-muted-foreground">fuori dal percorso</span>
+                <span className="text-xs text-muted-foreground">fuori dal flusso</span>
               </div>
               <Chips tickets={list} />
             </div>

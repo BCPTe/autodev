@@ -99,8 +99,8 @@ export function TicketSheet() {
             </section>
 
             <section>
-              <h3 className="mb-2 text-base font-semibold">Esecuzioni</h3>
-              {data.runs.length === 0 && <p className="text-muted-foreground">Nessuna esecuzione registrata.</p>}
+              <h3 className="mb-2 text-base font-semibold">Attività</h3>
+              {data.runs.length === 0 && <p className="text-muted-foreground">Nessuna attività registrata.</p>}
               <ul className="divide-y rounded-sm border">
                 {data.runs.map((r) => (
                   <li key={r.id}>

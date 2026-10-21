@@ -12,10 +12,10 @@ export function Runs() {
   const navigate = useNavigate()
   return (
     <>
-      <PageHeader title="Esecuzioni">Triage e fix lanciati da terminale o dalla dashboard</PageHeader>
+      <PageHeader title="Attività">Triage e fix lanciati da terminale o dalla dashboard</PageHeader>
       {isLoading && <Skeleton className="h-64 w-full" />}
       {data && data.runs.length === 0 && (
-        <p className="py-6 text-muted-foreground">Ancora nessuna esecuzione. Lancia <code className="font-mono">uv run autodev triage</code> e comparirà qui.</p>
+        <p className="py-6 text-muted-foreground">Ancora nessuna attività. Lancia <code className="font-mono">uv run autodev triage</code> e comparirà qui.</p>
       )}
       {data && data.runs.length > 0 && (
         <div className="overflow-x-auto rounded-sm border bg-card">

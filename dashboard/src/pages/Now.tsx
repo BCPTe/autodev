@@ -32,13 +32,13 @@ export function Now() {
 
   return (
     <>
-      <PageHeader title="Ora">{overview?.repo && <span>Repo su <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · modifiche non committate"}</span>}</PageHeader>
+      <PageHeader title="Panoramica">{overview?.repo && <span>Repo su <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · modifiche non committate"}</span>}</PageHeader>
 
       {tickets ? <PipelineRail tickets={tickets.tickets} /> : <Skeleton className="h-48 w-full" />}
 
       <div className="mt-12 grid gap-10 lg:grid-cols-2">
         <section aria-labelledby="da-te">
-          <h2 id="da-te" className="mb-3 text-xl font-semibold">Da te</h2>
+          <h2 id="da-te" className="mb-3 text-xl font-semibold">Da gestire</h2>
           {overview && overview.approvals.length > 0 && (
             <div className="mb-4 space-y-3">{overview.approvals.map((a) => <ApprovalCard key={a.id} a={a} />)}</div>
           )}

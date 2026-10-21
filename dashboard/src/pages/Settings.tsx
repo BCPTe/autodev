@@ -83,9 +83,9 @@ export function Settings() {
         <dl>
           <Row label="Modalità">{MODES.find((m) => m.id === control?.mode)?.label}: <span className="text-muted-foreground">{MODES.find((m) => m.id === control?.mode)?.hint}</span></Row>
           <Row label="Approvazione automatica">Solo rischio {c.autonomy.auto_approve_risks.join(" e ")} (in modalità Auto)</Row>
-          <Row label="Controllo del tabellone">Ogni {c.autonomy.poll_seconds} secondi (in Auto e Supervisionato)</Row>
+          <Row label="Frequenza di controllo">Ogni {c.autonomy.poll_seconds} secondi (in Auto e Supervisionato)</Row>
           <Row label="Nuovo tentativo dopo un errore">Dopo {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minuti, oppure a mano</Row>
-          <Row label="Punti di approvazione">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "dopo l'agente, prima delle verifiche" : "prima della pull request")).join("; ") + " (non in modalità Auto)" : "Nessuno"}</Row>
+          <Row label="Soste per la tua approvazione">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "dopo l'agente, prima delle verifiche" : "prima della pull request")).join("; ") + " (non in modalità Auto)" : "Nessuno"}</Row>
           <Row label="Ore di silenzio">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
           <Row label="Notifiche">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
           <Row label="Tetto giornaliero"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
@@ -103,8 +103,8 @@ export function Settings() {
         <h2 className="mb-1 mt-10 text-xl font-semibold">Limiti</h2>
         <dl>
           <Row label="Tetto per ticket">{money(c.limits.budget_usd_per_ticket)}</Row>
-          <Row label="Tentativi dentro un run">{c.limits.max_attempts}</Row>
-          <Row label="Lanci di fix per ticket">{c.limits.max_fix_runs}</Row>
+          <Row label="Tentativi per ogni avvio">{c.limits.max_attempts}</Row>
+          <Row label="Avvii del fix per ticket">{c.limits.max_fix_runs}</Row>
           <Row label="File modificabili per fix">{c.limits.max_files}</Row>
         </dl>
 
@@ -116,8 +116,8 @@ export function Settings() {
           <Row label="Modelli selezionabili nel ticket">{Object.entries(c.model_choices).map(([k, v]) => `${k} (${v})`).join(", ")}</Row>
         </dl>
 
-        <h2 className="mb-1 mt-10 text-xl font-semibold">Percorsi ad alto rischio</h2>
-        <p className="mb-2 text-muted-foreground">Le modifiche a questi file alzano il rischio a Alto.</p>
+        <h2 className="mb-1 mt-10 text-xl font-semibold">File ad alto rischio</h2>
+        <p className="mb-2 text-muted-foreground">Le modifiche a questi file portano il rischio al livello Alto.</p>
         <ul className="font-mono text-[13px]">{c.never_automerge.map((p) => <li key={p}>{p}</li>)}</ul>
       </section>
     </>

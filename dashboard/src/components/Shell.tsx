@@ -13,9 +13,9 @@ import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 const NAV = [
-  { to: "/", label: "Ora", icon: LayoutDashboard, end: true },
+  { to: "/", label: "Panoramica", icon: LayoutDashboard, end: true },
   { to: "/tickets", label: "Ticket", icon: Ticket },
-  { to: "/runs", label: "Esecuzioni", icon: Activity },
+  { to: "/runs", label: "Attività", icon: Activity },
   { to: "/repo", label: "Repo", icon: GitBranch },
   { to: "/prs", label: "Pull request", icon: GitPullRequest },
   { to: "/costs", label: "Costi", icon: CircleDollarSign },
@@ -83,14 +83,13 @@ function ProjectSwitch() {
 
 export function Shell() {
   useAttention()
-  const { setTheme } = useTheme()
+  const { dark, setTheme } = useTheme()
   const qc = useQueryClient()
   const logout = async () => {
     await post("/api/auth/logout", {})
     qc.clear()
     window.location.assign("/")
   }
-  const dark = document.documentElement.classList.contains("dark")
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[208px_1fr]">

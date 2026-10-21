@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 
 type Theme = "light" | "dark" | "system"
 const KEY = "autodev-theme"
-const Ctx = createContext<{ theme: Theme; setTheme: (t: Theme) => void }>({ theme: "system", setTheme: () => {} })
+const Ctx = createContext<{ theme: Theme; dark: boolean; setTheme: (t: Theme) => void }>({ theme: "system", dark: false, setTheme: () => {} })
 
 function stored(): Theme {
   try {
@@ -14,20 +14,22 @@ function stored(): Theme {
   return "system"
 }
 
-function apply(theme: Theme) {
-  const dark = theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-  document.documentElement.classList.toggle("dark", dark)
-}
+const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches
+const isDark = (theme: Theme) => theme === "dark" || (theme === "system" && prefersDark())
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(stored)
+  const [dark, setDark] = useState(() => isDark(stored()))
   useEffect(() => {
-    apply(theme)
+    const update = () => setDark(isDark(theme))
+    update()
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
-    const onChange = () => theme === "system" && apply("system")
-    mq.addEventListener("change", onChange)
-    return () => mq.removeEventListener("change", onChange)
+    mq.addEventListener("change", update)
+    return () => mq.removeEventListener("change", update)
   }, [theme])
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark)
+  }, [dark])
   const setTheme = (t: Theme) => {
     try {
       localStorage.setItem(KEY, t)
@@ -36,7 +38,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     setThemeState(t)
   }
-  return <Ctx.Provider value={{ theme, setTheme }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ theme, dark, setTheme }}>{children}</Ctx.Provider>
 }
 
 export const useTheme = () => useContext(Ctx)

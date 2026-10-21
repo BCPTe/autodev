@@ -15,14 +15,14 @@ export function RunDetail() {
   const { data, isError } = useRun(id)
   const [, setParams] = useSearchParams()
   const now = useNow(1000)
-  if (isError) return <p className="text-destructive">Esecuzione non trovata. <Link className="underline" to="/runs">Torna all'elenco</Link></p>
+  if (isError) return <p className="text-destructive">Attività non trovata. <Link className="underline" to="/runs">Torna all'elenco</Link></p>
   if (!data) return <Skeleton className="h-64 w-full" />
   const r = data.run
   const elapsed = r.status === "running" ? now / 1000 - r.started_at : r.duration
 
   return (
     <>
-      <p className="mb-2 text-sm"><Link className="text-muted-foreground underline-offset-4 hover:underline" to="/runs">Esecuzioni</Link></p>
+      <p className="mb-2 text-sm"><Link className="text-muted-foreground underline-offset-4 hover:underline" to="/runs">Attività</Link></p>
       <div className="mb-6">
         <h1 className="text-3xl font-semibold">{KIND_LABEL[r.kind]}: {r.ticket_title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
