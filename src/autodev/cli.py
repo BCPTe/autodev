@@ -7,6 +7,7 @@ import httpx
 from dotenv import load_dotenv
 
 from autodev.config import load_project
+from autodev.github import verify_access
 from autodev.models import Status
 from autodev.pipeline import fix_ticket, triage_ticket
 from autodev.trackers.notion import NotionTracker
@@ -26,6 +27,7 @@ async def check(project: str) -> int:
         print(f"Ready tickets (status Nuovo + Autorizzato): {len(tickets)}")
         for t in tickets:
             print(f"  - {t.title} [{t.kind}/{t.area}/{t.priority}]")
+        print(await verify_access(cfg))
     except httpx.HTTPStatusError as e:
         print(f"Notion error {e.response.status_code}: {e.response.text}")
         return 1
