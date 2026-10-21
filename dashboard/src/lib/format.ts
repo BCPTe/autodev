@@ -11,10 +11,10 @@ export function ago(input: number | string | null | undefined, now = Date.now())
   const ms = typeof input === "number" ? input * 1000 : Date.parse(input)
   if (Number.isNaN(ms)) return "—"
   const s = Math.round((now - ms) / 1000)
-  if (s < 45) return "ora"
-  if (s < 3600) return `${Math.round(s / 60)} min fa`
-  if (s < 86400) return `${Math.round(s / 3600)} h fa`
-  return `${Math.round(s / 86400)} g fa`
+  if (s < 45) return "now"
+  if (s < 3600) return `${Math.round(s / 60)} min ago`
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`
+  return `${Math.round(s / 86400)} d ago`
 }
 
 export const shortModel = (m: string | null) =>

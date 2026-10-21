@@ -52,9 +52,9 @@ def test_diff_without_a_branch_shows_uncommitted_changes_and_refuses_foreign_bra
 def test_checkout_refuses_a_dirty_tree_and_foreign_branches(project):
     agent_branch(project, "autodev/fix-a", "y = 2\n")
     (__import__("pathlib").Path(project.local_path) / "scratch.txt").write_text("wip")
-    with pytest.raises(RepoError, match="non committate"):
+    with pytest.raises(RepoError, match="uncommitted"):
         repo.checkout(project, "autodev/fix-a")
-    with pytest.raises(RepoError, match="solo a"):
+    with pytest.raises(RepoError, match="only switch"):
         repo.checkout(project, "somebody/else")
     (__import__("pathlib").Path(project.local_path) / "scratch.txt").unlink()
     repo.checkout(project, "autodev/fix-a")

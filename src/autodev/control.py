@@ -19,7 +19,7 @@ from autodev.progress import describe_tool
 
 current_control: ContextVar["RunControl | None"] = ContextVar("current_control", default=None)
 
-DENIED_IN_AUTO = "Permesso non concesso: in modalità Auto nessuno risponde alle richieste. Usa un altro modo."
+DENIED_IN_AUTO = "Permission not granted: in Auto mode nobody answers requests. Find another way."
 
 
 def remember_key(tool: str, tool_input: dict[str, Any]) -> str:
@@ -61,7 +61,7 @@ class RunControl:
 
     async def pause(self) -> None:
         if self.state == "running":
-            self.event("paused", "messo in pausa: scrivi un messaggio per farlo ripartire")
+            self.event("paused", "paused: write a message to make it continue")
             await self._interrupt_now()
 
     async def send(self, text: str) -> None:
@@ -77,7 +77,7 @@ class RunControl:
         """The agent finished before the interruption took effect: say so instead of losing the message silently."""
         self._interrupt = False
         while not self._messages.empty():
-            self.event("log", f"messaggio non consegnato (l'agente aveva già finito): {self._messages.get_nowait()}")
+            self.event("log", f"message not delivered (the agent had already finished): {self._messages.get_nowait()}")
 
     async def next_instruction(self) -> str:
         if self._messages.empty():
@@ -99,7 +99,7 @@ class RunControl:
         self._futures[approval_id] = future
         previous, self.state = self.state, "approval"
         self.event(kind, title, {"approval_id": approval_id, **detail})
-        self.notify("autodev aspetta te" if kind == "permission" else "autodev: serve la tua approvazione", title)
+        self.notify("autodev is waiting for you" if kind == "permission" else "autodev: your approval is needed", title)
         try:
             return await future
         finally:
@@ -116,7 +116,7 @@ class RunControl:
             "UPDATE approvals SET status = ?, decided_at = ?, note = ? WHERE id = ?",
             ("allowed" if allowed else "denied", now(), note or None, approval_id),
         )
-        self.event("decision", ("Consentito" if allowed else "Negato") + (f": {note}" if note else ""), {"approval_id": approval_id})
+        self.event("decision", ("Allowed" if allowed else "Denied") + (f": {note}" if note else ""), {"approval_id": approval_id})
         future.set_result((allowed, note, decision == "allow_run"))
         return True
 
@@ -131,7 +131,7 @@ class RunControl:
             "permission", title, {"tool": tool, "input": json.loads(json.dumps(tool_input, default=str))}
         )
         if not allowed:
-            return PermissionResultDeny(message=note or "Negato dall'utente.")
+            return PermissionResultDeny(message=note or "Denied by the user.")
         if remember:
             self._remembered.add(key)
         return PermissionResultAllow(updated_input=tool_input)

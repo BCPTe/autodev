@@ -22,7 +22,7 @@ function Chips({ tickets }: { tickets: Ticket[] }) {
           </button>
         </li>
       ))}
-      {tickets.length > MAX_CHIPS && <li className="px-2 text-xs text-muted-foreground">+{tickets.length - MAX_CHIPS} altri</li>}
+      {tickets.length > MAX_CHIPS && <li className="px-2 text-xs text-muted-foreground">+{tickets.length - MAX_CHIPS} more</li>}
     </ul>
   )
 }
@@ -32,13 +32,13 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
   const by = (s: TicketState) => tickets.filter((t) => t.status === s)
 
   return (
-    <section aria-label="Pipeline dei ticket">
+    <section aria-label="Ticket pipeline">
       <div className="relative grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-5">
         <div aria-hidden className="absolute left-[10%] right-[10%] top-[9px] hidden h-px bg-rail sm:block" />
         {TRACK.map((state) => {
           const list = by(state)
           const meta = STATES[state]
-          const attention = meta.owner === "tu" && list.length > 0
+          const attention = meta.owner === "you" && list.length > 0
           return (
             <div key={state} className="relative min-w-0">
               <div className="flex items-center gap-2 sm:justify-center">

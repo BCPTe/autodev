@@ -188,7 +188,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         try:
             ticket, comments = await tracker.detail(ticket_id)
         except Exception as e:
-            raise HTTPException(502, f"Notion non raggiungibile: {e}")
+            raise HTTPException(502, f"Notion is unreachable: {e}")
         runs = [run_row(r) for r in db.query("SELECT * FROM runs WHERE ticket_id = ? AND project = ? ORDER BY started_at DESC", (ticket_id, project))]
         actions = db.query("SELECT ts, actor, action, detail FROM actions WHERE ticket_id = ? ORDER BY id DESC LIMIT 30", (ticket_id,))
         return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs, "actions": actions}
@@ -212,7 +212,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     def run_detail(run_id: int):
         row = db.one("SELECT * FROM runs WHERE id = ? AND project = ?", (run_id, project))
         if not row:
-            raise HTTPException(404, "run non trovato")
+            raise HTTPException(404, "run not found")
         control = engine.controls.get(run_id)
         interactive = {"live": control is not None, "state": control.state if control else None, "approvals": pending_approvals(run_id)}
         return {"run": run_row(row), "events": events_for(run_id), "interactive": interactive}
@@ -220,7 +220,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     @r.get("/runs/{run_id}/stream", dependencies=[Depends(require_session)])
     async def run_stream(run_id: int, request: Request):
         if not db.one("SELECT id FROM runs WHERE id = ? AND project = ?", (run_id, project)):
-            raise HTTPException(404, "run non trovato")
+            raise HTTPException(404, "run not found")
 
         async def gen():
             last = int(request.headers.get("last-event-id") or 0)
@@ -269,23 +269,23 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     def cancel_run(run_id: int):
         row = db.one("SELECT status FROM runs WHERE id = ? AND project = ?", (run_id, project))
         if not row:
-            raise HTTPException(404, "run non trovato")
+            raise HTTPException(404, "run not found")
         if row["status"] != "running":
-            raise HTTPException(409, "il run è già terminato")
+            raise HTTPException(409, "the run has already finished")
         engine.stop(run_id)
         return {"ok": True}
 
     def live_control(run_id: int):
         control = engine.controls.get(run_id)
         if control is None:
-            raise HTTPException(409, "questo run non è interattivo (è terminato o è partito da terminale)")
+            raise HTTPException(409, "this run is not interactive (it has finished or was started from the terminal)")
         return control
 
     @r.post("/runs/{run_id}/message", dependencies=[Depends(require_session)])
     async def message_run(run_id: int, body: Message):
         text = body.text.strip()
         if not text:
-            raise HTTPException(422, "il messaggio è vuoto")
+            raise HTTPException(422, "the message is empty")
         await live_control(run_id).send(text)
         row = db.one("SELECT ticket_id FROM runs WHERE id = ? AND project = ?", (run_id, project))
         db.audit("user", "message", row["ticket_id"], text[:200])
@@ -304,10 +304,10 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     def decide_approval(approval_id: int, body: Decision):
         row = db.one("SELECT a.run_id, a.status, r.ticket_id FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.id = ? AND r.project = ?", (approval_id, project))
         if not row:
-            raise HTTPException(404, "richiesta non trovata")
+            raise HTTPException(404, "request not found")
         control = engine.controls.get(row["run_id"])
         if row["status"] != "pending" or control is None or not control.decide(approval_id, body.decision, body.note):
-            raise HTTPException(409, "la richiesta non è più in attesa")
+            raise HTTPException(409, "the request is no longer pending")
         db.audit("user", "approval", row["ticket_id"], body.decision)
         return {"ok": True}
 
@@ -318,7 +318,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         except Refused as e:
             raise HTTPException(409, str(e))
         except Exception as e:
-            raise HTTPException(502, f"Notion non raggiungibile: {e}")
+            raise HTTPException(502, f"Notion is unreachable: {e}")
         cache["at"] = 0.0
         return {"ok": True}
 
@@ -326,18 +326,18 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     async def edit_ticket(ticket_id: str, body: TicketEdit):
         changes = body.model_dump(exclude_none=True)
         if not changes:
-            raise HTTPException(422, "nessuna modifica")
+            raise HTTPException(422, "no changes")
         if "model" in changes and changes["model"] != "Auto" and changes["model"] not in cfg.model_choices:
-            raise HTTPException(422, f"modello sconosciuto: {changes['model']}")
+            raise HTTPException(422, f"unknown model: {changes['model']}")
         if changes.get("attempts", 0) < 0:
-            raise HTTPException(422, "i tentativi non possono essere negativi")
+            raise HTTPException(422, "attempts cannot be negative")
         try:
             if "status" in changes:
                 await tracker.set_status(ticket_id, changes.pop("status"))
             if changes:
                 await tracker.update(ticket_id, **changes)
         except Exception as e:
-            raise HTTPException(502, f"Notion non ha accettato la modifica: {e}")
+            raise HTTPException(502, f"Notion did not accept the change: {e}")
         db.audit("user", "edit", ticket_id, json.dumps(body.model_dump(exclude_none=True), default=str))
         cache["at"] = 0.0
         return {"ok": True}
@@ -346,11 +346,11 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     async def add_comment(ticket_id: str, body: CommentBody):
         text = body.text.strip()
         if not text:
-            raise HTTPException(422, "il commento è vuoto")
+            raise HTTPException(422, "the comment is empty")
         try:
             await tracker.comment(ticket_id, text, as_human=True)
         except Exception as e:
-            raise HTTPException(502, f"Notion non ha accettato il commento: {e}")
+            raise HTTPException(502, f"Notion did not accept the comment: {e}")
         db.audit("user", "comment", ticket_id, text[:200])
         return {"ok": True}
 
@@ -376,7 +376,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             try:
                 cache["prs"] = await github.list_pulls(cfg, cfg.branch_prefix)
             except Exception as e:
-                raise HTTPException(502, f"GitHub non raggiungibile: {e}")
+                raise HTTPException(502, f"GitHub is unreachable: {e}")
             cache["prs_at"] = time.time()
         return cache["prs"]
 
@@ -399,25 +399,25 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     @r.post("/prs/{number}/merge", dependencies=[Depends(require_session)])
     async def merge_pr(number: int, body: Merge):
         if not body.confirm:
-            raise HTTPException(422, "serve la conferma esplicita")
+            raise HTTPException(422, "explicit confirmation is required")
         pr = next((p for p in await pulls(True) if p["number"] == number), None)
         if not pr or pr["state"] != "open":
-            raise HTTPException(409, "la pull request non è aperta")
+            raise HTTPException(409, "the pull request is not open")
         if pr["draft"]:
-            raise HTTPException(409, "la pull request è una bozza")
+            raise HTTPException(409, "the pull request is a draft")
         if pr["checks"] and pr["checks"]["verdict"] in ("failing", "pending"):
-            raise HTTPException(409, "i controlli su GitHub non sono passati: aspetta o correggi")
+            raise HTTPException(409, "the checks on GitHub have not passed: wait or fix them")
         if pr["mergeable"] is False:
-            raise HTTPException(409, "ci sono conflitti con il branch di base")
+            raise HTTPException(409, "there are conflicts with the base branch")
         ticket = next((t for t in await tickets() if t.pr_url == pr["url"]), None)
-        if ticket and ticket.risk == "Alto":
-            raise HTTPException(403, "rischio Alto: unisci a mano su GitHub dopo averla letta")
+        if ticket and ticket.risk == "High":
+            raise HTTPException(403, "High risk: merge it by hand on GitHub after reading it")
         try:
             await github.merge_pull(cfg, number, body.method)
             if body.delete_branch:
                 await github.delete_remote_branch(cfg, pr["branch"])
         except Exception as e:
-            raise HTTPException(502, f"GitHub ha rifiutato il merge: {e}")
+            raise HTTPException(502, f"GitHub refused the merge: {e}")
         if ticket:
             await tracker.set_status(ticket.id, Status.CLOSED)
         db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
@@ -427,7 +427,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
 
     def checkout_guard() -> None:
         if engine.busy():
-            raise HTTPException(409, "un agente sta lavorando sul checkout")
+            raise HTTPException(409, "an agent is working on the checkout")
 
     @r.get("/repo/diff", dependencies=[Depends(require_session)])
     async def repo_diff(branch: str | None = None):
@@ -534,11 +534,11 @@ def create_app(
     async def guard(request: Request, call_next):
         host = hostname(request.headers.get("host", ""))
         if host not in ALLOWED_HOSTS:
-            return Response("host non consentito", status_code=400)
+            return Response("host not allowed", status_code=400)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             if origin and hostname(origin.split("://", 1)[-1]) not in ALLOWED_HOSTS:
-                return Response("origine non consentita", status_code=403)
+                return Response("origin not allowed", status_code=403)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -550,7 +550,7 @@ def create_app(
 
     def require_session(request: Request) -> None:
         if not auth.valid(request.cookies.get(COOKIE)):
-            raise HTTPException(401, "non autenticato")
+            raise HTTPException(401, "not authenticated")
 
     def set_cookie(response: Response, token: str) -> None:
         response.set_cookie(COOKIE, token, max_age=authmod.SESSION_SECONDS, httponly=True, samesite="strict", path="/")
@@ -575,10 +575,10 @@ def create_app(
     def auth_login(body: Credentials, response: Response):
         wait = auth.retry_after()
         if wait:
-            raise HTTPException(429, f"troppi tentativi, riprova tra {wait} secondi", headers={"Retry-After": str(wait)})
+            raise HTTPException(429, f"too many attempts, try again in {wait} seconds", headers={"Retry-After": str(wait)})
         token = auth.login(body.password)
         if not token:
-            raise HTTPException(401, "password errata")
+            raise HTTPException(401, "wrong password")
         set_cookie(response, token)
         return {"ok": True}
 

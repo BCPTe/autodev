@@ -20,7 +20,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | Key | Meaning and where to find it |
 |---|---|
 | `name` | Optional display name. Defaults to the file name. |
-| `language` | Language the agents write analysis, questions and notes in (`Italian`, `English`...). |
+| `language` | Language the agents write analysis, questions and notes in (`English`, `Italian`...; default `English`). |
 | `repo` | Remote URL of the repository: in the checkout, `git remote get-url origin`. |
 | `base_branch` | Branch that fixes branch from and PRs target (`staging`, `main`...). `git branch -a` in the checkout, or the repo's default branch on GitHub. |
 | `local_path` | Absolute path of the project's checkout on this machine. |
@@ -60,7 +60,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 |---|---|
 | `pr.create` | `true` to push the branch and open a PR after a verified fix; `false` leaves the branch local. |
 | `pr.slug` | `owner/repo` as in `github.com/owner/repo`. Needed for the PR page, merge and housekeeping even when `create` is false. |
-| `risk.never_automerge` | Globs of sensitive files (billing, auth, migrations). A change touching them is rated **Alto**: never approved by Auto and never mergeable from the dashboard. Think of what would hurt in production. |
+| `risk.never_automerge` | Globs of sensitive files (billing, auth, migrations). A change touching them is rated **High**: never approved by Auto and never mergeable from the dashboard. Think of what would hurt in production. |
 | `limits.max_attempts` | Fix attempts inside one run (each retry gets the verification output). |
 | `limits.max_fix_runs` | How many times a ticket may be started before it escalates; reset with "Azzera tentativi". |
 | `limits.max_files` | A fix touching more files than this is escalated as suspicious. |
@@ -74,7 +74,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | `default_mode` | Mode at first start: `manual` (default), `supervised`, `auto`, `paused`. Afterwards the dashboard's choice is remembered. |
 | `poll_seconds` | How often Auto/Supervised look at the board (default 60). |
 | `retry_cooldown_seconds` | A ticket whose run failed is not retried automatically for this long (default 1800). |
-| `auto_approve_risks` | Risk levels Auto may approve by itself (default `[Basso, Medio]`). |
+| `auto_approve_risks` | Risk levels Auto may approve by itself (default `[Low, Medium]`). |
 | `checkpoints` | Where a run waits for you (never in Auto): `after_agent`, `before_pr` (default). |
 | `quiet_hours` | `"22:00-07:00"` local time: nothing starts by itself. |
 | `notify_command` | Desktop notifier as an argument list with `{title}` and `{body}`. Default: `notify-send` if installed. |

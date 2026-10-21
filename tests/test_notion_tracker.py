@@ -18,7 +18,7 @@ def _page(authorized: bool = True) -> dict:
         "id": "page-1",
         "properties": {
             "Title": {"title": [{"plain_text": "Export PDF vuoto"}]},
-            "Status": {"status": {"name": "Nuovo"}},
+            "Status": {"status": {"name": "New"}},
             "Type": sel("Bug"),
             "Area": sel("Export PDF"),
             "Priority": sel("Alta"),
@@ -36,7 +36,7 @@ def _page(authorized: bool = True) -> dict:
 def test_project_config_loads():
     cfg = load_project(ROOT / "projects" / "demo.yaml")
     assert cfg.base_branch == "staging"
-    assert cfg.tracker.status_map[Status.NEW] == "Nuovo"
+    assert cfg.tracker.status_map[Status.NEW] == "New"
 
 
 @respx.mock

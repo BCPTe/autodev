@@ -26,7 +26,7 @@ def env(tmp_path, monkeypatch):
     cfg.pr.slug = "o/r"
     git(cfg.local_path, "fetch", "-q")
     db = Database(tmp_path / "s.db")
-    tracker = Tracker([Ticket(id="t1", title="Bug", status=Status.REVIEW, pr_url="https://github.com/o/r/pull/1", risk="Basso")])
+    tracker = Tracker([Ticket(id="t1", title="Bug", status=Status.REVIEW, pr_url="https://github.com/o/r/pull/1", risk="Low")])
     app = create_app(cfg, "shop", db, tracker, static_dir=None)
     c = TestClient(app)
     c.post("/api/auth/setup", json={"password": PASSWORD, "code": app.state.auth.setup_code})
@@ -52,7 +52,7 @@ def env(tmp_path, monkeypatch):
 def test_prs_are_listed_with_their_ticket(env):
     c, *_ = env
     prs = c.get("/api/prs").json()["prs"]
-    assert prs[0]["number"] == 1 and prs[0]["ticket"]["id"] == "t1" and prs[0]["ticket"]["risk"] == "Basso"
+    assert prs[0]["number"] == 1 and prs[0]["ticket"]["id"] == "t1" and prs[0]["ticket"]["risk"] == "Low"
 
 
 def test_merge_needs_explicit_confirmation_and_closes_the_ticket(env):
@@ -78,7 +78,7 @@ def test_merge_is_refused_when_the_pull_request_is_not_ready(env, change, code):
 
 def test_high_risk_changes_are_never_merged_from_the_dashboard(env):
     c, _, _, tracker, state, _ = env
-    tracker.tickets["t1"].risk = "Alto"
+    tracker.tickets["t1"].risk = "High"
     r = c.post("/api/prs/1/merge", json={"confirm": True})
     assert r.status_code == 403 and state["merged"] == []
 

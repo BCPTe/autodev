@@ -16,7 +16,7 @@ def _ticket(body: str) -> Ticket:
 
 
 def _result(confidence: str) -> TriageResult:
-    return TriageResult(verdict="ready", confidence=confidence, risk="Basso", analysis="a")
+    return TriageResult(verdict="ready", confidence=confidence, risk="Low", analysis="a")
 
 
 def test_prefilter_rejects_short_body():
@@ -67,9 +67,9 @@ async def test_cascade_reports_progress_lines(monkeypatch):
     monkeypatch.setattr(triage, "_run", fake)
     lines: list[str] = []
     await run_triage(CFG, _ticket("x" * 100), report=lines.append)
-    assert any("avvio analisi" in l for l in lines)
-    assert any("confidenza bassa, passo al modello successivo" in l for l in lines)
-    assert sum("fine: ready" in l for l in lines) == 2
+    assert any("starting analysis" in l for l in lines)
+    assert any("low confidence, moving to the next model" in l for l in lines)
+    assert sum("done: ready" in l for l in lines) == 2
 
 
 def test_follow_up_comments_reach_the_triage_prompt():
@@ -86,18 +86,18 @@ def test_ready_verdict_never_carries_open_questions():
     from autodev.pipeline import format_comment
 
     raw = TriageResult(
-        verdict="ready", confidence="high", risk="Basso", analysis="a",
+        verdict="ready", confidence="high", risk="Low", analysis="a",
         questions=["Confermi X?"], assumptions=["Y"],
     )
     fixed = normalize(raw)
     assert fixed.questions == [] and fixed.assumptions == ["Y", "Confermi X?"]
-    comment = format_comment(fixed, "Basso", [])
-    assert "Domande" not in comment
-    assert "Assunzioni da confermare in review (non bloccanti):" in comment and "- Confermi X?" in comment
+    comment = format_comment(fixed, "Low", [])
+    assert "Questions" not in comment
+    assert "Assumptions to confirm in review (not blocking):" in comment and "- Confermi X?" in comment
 
 
 def test_needs_info_keeps_its_questions():
     from autodev.agents.triage import normalize
 
-    raw = TriageResult(verdict="needs_info", confidence="high", risk="Basso", analysis="a", questions=["Quale file?"])
+    raw = TriageResult(verdict="needs_info", confidence="high", risk="Low", analysis="a", questions=["Quale file?"])
     assert normalize(raw).questions == ["Quale file?"]

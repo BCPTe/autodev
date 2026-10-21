@@ -76,10 +76,10 @@ class Workspace:
         branch = f"{cfg.branch_prefix}/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
         dirty = git(path, "status", "--porcelain").splitlines()
         if dirty:
-            shown = "\n".join(f"  {line}" for line in dirty[:12]) + (f"\n  ... e altri {len(dirty) - 12}" if len(dirty) > 12 else "")
+            shown = "\n".join(f"  {line}" for line in dirty[:12]) + (f"\n  ... and {len(dirty) - 12} more" if len(dirty) > 12 else "")
             raise DirtyCheckout(
-                f"{path} ha modifiche non committate; l'agente lavora lì e le mischierebbe ai suoi commit.\n{shown}\n"
-                "Fai commit o `git stash`, poi rilancia."
+                f"{path} has uncommitted changes; the agent works there and would mix them into its commits.\n{shown}\n"
+                "Commit or `git stash`, then run again."
             )
         git(path, "fetch", "--quiet", "origin", cfg.base_branch)
         base_ref = f"origin/{cfg.base_branch}"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-/** Re-renders every `ms` so elapsed times and "x min fa" labels stay current. */
+/** Re-renders every `ms` so elapsed times and "x min ago" labels stay current. */
 export function useNow(ms = 1000) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {

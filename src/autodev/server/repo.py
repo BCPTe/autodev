@@ -67,7 +67,7 @@ def diff(cfg: ProjectConfig, branch: str | None = None, max_bytes: int = 200_000
     path = Path(cfg.local_path)
     if branch:
         if not branch.startswith(f"{cfg.branch_prefix}/") or _run(path, "rev-parse", "--verify", "--quiet", branch).returncode != 0:
-            raise RepoError("branch sconosciuto")
+            raise RepoError("unknown branch")
         spec = [f"origin/{cfg.base_branch}...{branch}"]
     else:
         spec = ["HEAD"]
@@ -91,12 +91,12 @@ def diff(cfg: ProjectConfig, branch: str | None = None, max_bytes: int = 200_000
 def checkout(cfg: ProjectConfig, branch: str) -> str:
     path = Path(cfg.local_path)
     if branch != cfg.base_branch and not branch.startswith(f"{cfg.branch_prefix}/"):
-        raise RepoError(f"si può passare solo a {cfg.base_branch} o a un branch {cfg.branch_prefix}/*")
+        raise RepoError(f"you can only switch to {cfg.base_branch} or to a {cfg.branch_prefix}/* branch")
     if _run(path, "status", "--porcelain").stdout.strip():
-        raise RepoError("ci sono modifiche non committate: fai commit o stash prima di cambiare branch")
+        raise RepoError("there are uncommitted changes: commit or stash before switching branch")
     r = _run(path, "checkout", branch)
     if r.returncode != 0:
-        raise RepoError(r.stderr.strip() or "checkout non riuscito")
+        raise RepoError(r.stderr.strip() or "checkout failed")
     return branch
 
 
@@ -114,12 +114,12 @@ def delete_branches(cfg: ProjectConfig, names: list[str], pr_merged: set[str] = 
     allowed = set(removable_branches(cfg, pr_merged))
     refused = [n for n in names if n not in allowed]
     if refused:
-        raise RepoError("non eliminabili (non uniti, attivi o fuori dal prefisso): " + ", ".join(refused))
+        raise RepoError("cannot be deleted (not merged, active or outside the prefix): " + ", ".join(refused))
     path = Path(cfg.local_path)
     done = []
     for name in names:
         r = _run(path, "branch", "-D", name)
         if r.returncode != 0:
-            raise RepoError(r.stderr.strip() or f"non riesco a eliminare {name}")
+            raise RepoError(r.stderr.strip() or f"cannot delete {name}")
         done.append(name)
     return done

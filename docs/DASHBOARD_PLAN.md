@@ -23,7 +23,7 @@ Set globally, per stage (triage / fix / PR), and overridable per ticket.
 | **Paused** | Nothing starts, running jobs finish. A **Stop all** button kills running agents. |
 
 Checkpoints (each can be switched on or off): after triage (go / no go, today the move to
-"In lavorazione"), agent's plan before it edits, before the commit, before the PR is opened,
+"In progress"), agent's plan before it edits, before the commit, before the PR is opened,
 and every time the agent asks for a permission it does not already have.
 
 ## Screens
@@ -32,7 +32,7 @@ and every time the agent asks for a permission it does not already have.
 │ autodev   mode: [Auto|Supervised|Manual|Paused]   today $4.2/$20   ● 1 agent   │
 ├───────────┬──────────────────────────────────────────────────────────────────┤
 │ Inbox  3  │  Ticket board (Notion states as columns, drag to change state)    │
-│ Tickets   │  Nuovo | Serve info | Analizzato | In lavorazione | Da rivedere   │
+│ Tickets   │  New | Needs info | Analysed | In progress | In review   │
 │ Live      │                                                                    │
 │ Repo      │  ── ticket detail ──────────────────────────────────────────────  │
 │ PRs       │  description · comments · triage analysis · runs · cost · PR       │
@@ -40,10 +40,10 @@ and every time the agent asks for a permission it does not already have.
 │ Settings  │  [Comment to Notion] [Close]                                       │
 └───────────┴──────────────────────────────────────────────────────────────────┘
 ```
-1. **Inbox**: only what needs you: approvals, "Serve info" answers, "Da rivedere", escalations,
+1. **Inbox**: only what needs you: approvals, "Needs info" answers, "In review", escalations,
    budget alerts. Desktop notification when something lands here.
-2. **Tickets**: board and detail as above. Every Notion column editable (Autorizzato, Modello,
-   Stato, Tentativi). Comment box writes to the ticket.
+2. **Tickets**: board and detail as above. Every Notion column editable (Authorized, Model,
+   Status, Attempts). Comment box writes to the ticket.
 3. **Live**: the running agent: action stream (files read, searches, edits, test runs), the diff
    growing, test output, cost ticking, elapsed time. Buttons: **Pause**, **Stop**, **Take over**.
 4. **Chat with an agent**: send a message to a running agent ("also handle X", "stop, that file is

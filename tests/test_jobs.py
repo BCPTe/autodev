@@ -21,8 +21,8 @@ def summary(result):
 
 async def test_a_finished_run_is_recorded_with_its_events_and_cost(db):
     async def work(report):
-        report("legge x.py")
-        report("cerca 'a'")
+        report("reads x.py")
+        report("searches 'a'")
         return {"outcome": "analyzed", "cost": 0.4}
 
     echoed = []
@@ -35,7 +35,7 @@ async def test_a_finished_run_is_recorded_with_its_events_and_cost(db):
     assert run["finished_at"] >= run["started_at"]
     events = db.query("SELECT type, text FROM events ORDER BY id")
     assert [e["type"] for e in events] == ["started", "log", "log", "result", "finished"]
-    assert echoed == ["legge x.py", "cerca 'a'"]
+    assert echoed == ["reads x.py", "searches 'a'"]
 
 
 async def test_a_failing_run_is_marked_failed_and_the_error_is_raised(db):
@@ -79,7 +79,7 @@ async def test_daily_cap_blocks_new_runs_but_not_before_it_is_reached(db):
     await run_tracked(db, project="p", ticket=TICKET, kind="fix", work=work, summarize=summary, daily_cap_usd=10)
     assert spent_today(db) == 6.0
     await run_tracked(db, project="p", ticket=TICKET, kind="fix", work=work, summarize=summary, daily_cap_usd=10)
-    with pytest.raises(DailyCapReached, match=r"\$12\.00 su \$10\.00"):
+    with pytest.raises(DailyCapReached, match=r"\$12\.00 of \$10\.00"):
         await run_tracked(db, project="p", ticket=TICKET, kind="fix", work=work, summarize=summary, daily_cap_usd=10)
     assert db.one("SELECT COUNT(*) AS n FROM runs")["n"] == 2
 

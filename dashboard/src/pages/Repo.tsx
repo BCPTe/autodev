@@ -18,7 +18,7 @@ export function Repo() {
   const { act, pending } = useAct()
   const [diff, setDiff] = useState<string | "working" | null>(null)
   if (isLoading || !r) return <Skeleton className="h-64 w-full" />
-  const locked = r.busy ? "Un agente sta lavorando sul checkout" : null
+  const locked = r.busy ? "An agent is working on the checkout" : null
   const removable = r.branches.filter((b) => b.merged && !b.current)
   const switchTo = (branch: string, done: string) => act(() => post("/api/repo/checkout", { branch }), done)
 
@@ -28,71 +28,71 @@ export function Repo() {
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         {r.on_agent_branch && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked || !r.clean} title={locked ?? (r.clean ? undefined : "Prima fai commit o stash delle modifiche")} onClick={() => switchTo(r.base_branch, `Sei tornato su ${r.base_branch}`)}>
-            <Undo2 /> Torna a {r.base_branch}
+          <Button size="sm" variant="outline" disabled={pending || !!locked || !r.clean} title={locked ?? (r.clean ? undefined : "Commit or stash your changes first")} onClick={() => switchTo(r.base_branch, `Back on ${r.base_branch}`)}>
+            <Undo2 /> Back to {r.base_branch}
           </Button>
         )}
         {config?.has_checks && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Esegue i controlli del progetto (test, typecheck) sul codice com'è ora"} onClick={() => act(() => post("/api/repo/checks", {}), "Controlli avviati: guarda Attività")}>
-            <FlaskConical /> Esegui i controlli
+          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Runs the project's checks (tests, typecheck) on the code as it is now"} onClick={() => act(() => post("/api/repo/checks", {}), "Checks started: see Activity")}>
+            <FlaskConical /> Run the checks
           </Button>
         )}
         {removable.length > 0 && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", {}), `${removable.length} branch eliminati`)}>
-            <Trash2 /> Elimina i {removable.length} branch già uniti
+          <Button size="sm" variant="outline" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", {}), `${removable.length} branches deleted`)}>
+            <Trash2 /> Delete the {removable.length} merged branches
           </Button>
         )}
         {locked && <span className="text-[13px] text-muted-foreground">{locked}</span>}
       </div>
 
-      <section className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4" aria-label="Stato del checkout">
+      <section className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4" aria-label="Checkout state">
         <div>
-          <p className="text-xs text-muted-foreground">Branch attivo</p>
+          <p className="text-xs text-muted-foreground">Current branch</p>
           <p className="flex items-center gap-2 font-mono text-[15px]"><Lamp kind={r.on_agent_branch ? "amber" : "green"} />{r.branch}</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">{r.on_agent_branch ? "Sei sul branch di un agente: Docker serve il suo codice." : `Sei sul branch di base (${r.base_branch}).`}</p>
+          <p className="mt-1 text-[13px] text-muted-foreground">{r.on_agent_branch ? "You are on an agent's branch: Docker serves its code." : `You are on the base branch (${r.base_branch}).`}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Modifiche non committate</p>
-          <p className="flex items-center gap-2 text-[15px]"><Lamp kind={r.clean ? "green" : "red"} />{r.clean ? "Nessuna" : `${r.dirty.length} file`}</p>
-          <p className="mt-1 text-[13px] text-muted-foreground">{r.clean ? "Un agente può partire." : "Un agente non parte finché non fai commit o stash."}</p>
+          <p className="text-xs text-muted-foreground">Uncommitted changes</p>
+          <p className="flex items-center gap-2 text-[15px]"><Lamp kind={r.clean ? "green" : "red"} />{r.clean ? "None" : `${r.dirty.length} files`}</p>
+          <p className="mt-1 text-[13px] text-muted-foreground">{r.clean ? "An agent can start." : "No agent starts until you commit or stash."}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Rispetto a origin/{r.base_branch}</p>
-          <p className="font-display text-xl tabular-nums">{r.ahead ?? "?"} avanti · {r.behind ?? "?"} indietro</p>
+          <p className="text-xs text-muted-foreground">Compared with origin/{r.base_branch}</p>
+          <p className="font-display text-xl tabular-nums">{r.ahead ?? "?"} ahead · {r.behind ?? "?"} behind</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Agente al lavoro</p>
-          <p className="flex items-center gap-2 text-[15px]"><Lamp kind={r.busy ? "violet" : "idle"} live={r.busy} />{r.busy ? "Un fix è in corso" : "Libero"}</p>
+          <p className="text-xs text-muted-foreground">Agent working</p>
+          <p className="flex items-center gap-2 text-[15px]"><Lamp kind={r.busy ? "violet" : "idle"} live={r.busy} />{r.busy ? "A fix is running" : "Free"}</p>
         </div>
       </section>
 
       {!r.clean && (
         <section className="mt-8">
-          <h2 className="mb-2 text-xl font-semibold">File modificati</h2>
+          <h2 className="mb-2 text-xl font-semibold">Changed files</h2>
           <ul className="rounded-sm border bg-card p-3 font-mono text-[12.5px]">
             {r.dirty.map((line) => <li key={line}>{line}</li>)}
           </ul>
           <button className="mt-2 text-[13px] text-primary underline-offset-4 hover:underline" onClick={() => setDiff(diff === "working" ? null : "working")}>
-            {diff === "working" ? "Nascondi le differenze" : "Vedi le differenze"}
+            {diff === "working" ? "Hide the changes" : "View the changes"}
           </button>
           {diff === "working" && <div className="mt-2"><DiffView branch={null} /></div>}
         </section>
       )}
 
       <section className="mt-10">
-        <h2 className="mb-2 text-xl font-semibold">Branch degli agenti</h2>
+        <h2 className="mb-2 text-xl font-semibold">Agent branches</h2>
         {r.branches.length === 0 ? (
-          <p className="text-muted-foreground">Nessun branch <span className="font-mono">autodev/*</span>. Compaiono dopo il primo fix.</p>
+          <p className="text-muted-foreground">No <span className="font-mono">autodev/*</span> branches yet: they appear after the first fix.</p>
         ) : (
           <div className="overflow-x-auto rounded-sm border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Branch</TableHead>
-                  <TableHead>Stato</TableHead>
-                  <TableHead className="text-right">Commit in più</TableHead>
-                  <TableHead>Ultimo commit</TableHead>
-                  <TableHead>Aggiornato</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Commits ahead</TableHead>
+                  <TableHead>Last commit</TableHead>
+                  <TableHead>Updated</TableHead>
                   <TableHead><span className="sr-only">Azioni</span></TableHead>
                 </TableRow>
               </TableHeader>
@@ -103,7 +103,7 @@ export function Repo() {
                     <TableCell>
                       <span className="inline-flex items-center gap-2 whitespace-nowrap">
                         <Lamp kind={b.current ? "amber" : b.merged ? "idle" : "blue"} />
-                        {b.current ? "Attivo" : b.merged ? "Già unito: si può eliminare" : "Da unire"}
+                        {b.current ? "Active" : b.merged ? "Merged: can be deleted" : "Not merged"}
                       </span>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{b.ahead}</TableCell>
@@ -111,12 +111,12 @@ export function Repo() {
                     <TableCell className="whitespace-nowrap text-muted-foreground">{ago(b.updated)}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
-                        <Button size="xs" variant="ghost" onClick={() => setDiff(diff === b.name ? null : b.name)}>{diff === b.name ? "Nascondi" : "Diff"}</Button>
+                        <Button size="xs" variant="ghost" onClick={() => setDiff(diff === b.name ? null : b.name)}>{diff === b.name ? "Hide" : "Diff"}</Button>
                         {!b.current && (
-                          <Button size="xs" variant="ghost" disabled={pending || !!locked || !r.clean} title="Passa a questo branch per provarlo in locale" onClick={() => switchTo(b.name, `Sei su ${b.name}`)}>Prova</Button>
+                          <Button size="xs" variant="ghost" disabled={pending || !!locked || !r.clean} title="Switch to this branch to try it locally" onClick={() => switchTo(b.name, `Now on ${b.name}`)}>Try</Button>
                         )}
                         {b.merged && !b.current && (
-                          <Button size="xs" variant="ghost" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", { names: [b.name] }), "Branch eliminato")}>Elimina</Button>
+                          <Button size="xs" variant="ghost" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", { names: [b.name] }), "Branch deleted")}>Delete</Button>
                         )}
                       </div>
                     </TableCell>
@@ -126,12 +126,12 @@ export function Repo() {
             </Table>
           </div>
         )}
-        {diff && diff !== "working" && <div className="mt-4"><h3 className="mb-2 font-display text-base font-semibold">Modifiche di <span className="font-mono text-sm">{diff}</span> rispetto a {r.base_branch}</h3><DiffView branch={diff} /></div>}
-        <p className="mt-2 text-[13px] text-muted-foreground">Le pull request di questi branch sono in <Link className="underline underline-offset-4" to="/prs">Pull request</Link>.</p>
+        {diff && diff !== "working" && <div className="mt-4"><h3 className="mb-2 font-display text-base font-semibold">Changes of <span className="font-mono text-sm">{diff}</span> against {r.base_branch}</h3><DiffView branch={diff} /></div>}
+        <p className="mt-2 text-[13px] text-muted-foreground">The pull requests of these branches are in <Link className="underline underline-offset-4" to="/prs">Pull requests</Link>.</p>
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-2 text-xl font-semibold">Ultimi commit</h2>
+        <h2 className="mb-2 text-xl font-semibold">Latest commits</h2>
         <ul className="divide-y border-y">
           {r.commits.map((c) => (
             <li key={c.sha} className="flex gap-4 py-1.5">

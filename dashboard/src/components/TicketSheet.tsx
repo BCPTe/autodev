@@ -41,7 +41,7 @@ export function TicketSheet() {
         </SheetHeader>
 
         {isLoading && <div className="space-y-3 p-4"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-32 w-full" /></div>}
-        {error && <p className="p-4 text-destructive">Impossibile leggere il ticket: {(error as Error).message}</p>}
+        {error && <p className="p-4 text-destructive">Could not read the ticket: {(error as Error).message}</p>}
 
         {t && data && (
           <div className="space-y-6 p-4">
@@ -49,12 +49,12 @@ export function TicketSheet() {
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
               <Field label="Area">{t.area}</Field>
-              <Field label="Priorità">{t.priority}</Field>
-              <Field label="Rischio">{t.risk}</Field>
-              <Field label="Tentativi di fix">{t.attempts}</Field>
-              <Field label="Costo">{money(t.cost_usd)}</Field>
-              <Field label="Esito verifica">{t.verification}</Field>
-              <Field label="Aggiornato">{ago(t.updated_at)}</Field>
+              <Field label="Priority">{t.priority}</Field>
+              <Field label="Risk">{t.risk}</Field>
+              <Field label="Fix attempts">{t.attempts}</Field>
+              <Field label="Cost">{money(t.cost_usd)}</Field>
+              <Field label="Verification">{t.verification}</Field>
+              <Field label="Updated">{ago(t.updated_at)}</Field>
             </dl>
 
             {(t.branch || t.pr_url) && (
@@ -70,19 +70,19 @@ export function TicketSheet() {
 
             {t.agent_note && (
               <section>
-                <h3 className="mb-1 text-base font-semibold">Nota dell'agente</h3>
+                <h3 className="mb-1 text-base font-semibold">Agent notes</h3>
                 <p className="whitespace-pre-wrap rounded-sm border-l-2 border-lamp-amber bg-muted/60 p-3 text-[13px]">{t.agent_note}</p>
               </section>
             )}
 
             <section>
-              <h3 className="mb-1 text-base font-semibold">Descrizione</h3>
-              <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">{t.body || "Nessuna descrizione."}</p>
+              <h3 className="mb-1 text-base font-semibold">Description</h3>
+              <p className="whitespace-pre-wrap text-[13.5px] leading-relaxed">{t.body || "No description."}</p>
             </section>
 
             <section>
-              <h3 className="mb-2 text-base font-semibold">Commenti</h3>
-              {data.comments.length === 0 && <p className="text-muted-foreground">Nessun commento.</p>}
+              <h3 className="mb-2 text-base font-semibold">Comments</h3>
+              {data.comments.length === 0 && <p className="text-muted-foreground">No comments.</p>}
               <ol className="space-y-3">
                 {data.comments.map((c, i) => (
                   <li key={i} className={cn("rounded-sm border p-3", c.is_bot ? "bg-card" : "border-primary/30 bg-accent/40")}>
@@ -99,8 +99,8 @@ export function TicketSheet() {
             </section>
 
             <section>
-              <h3 className="mb-2 text-base font-semibold">Attività</h3>
-              {data.runs.length === 0 && <p className="text-muted-foreground">Nessuna attività registrata.</p>}
+              <h3 className="mb-2 text-base font-semibold">Activity</h3>
+              {data.runs.length === 0 && <p className="text-muted-foreground">No activity recorded.</p>}
               <ul className="divide-y rounded-sm border">
                 {data.runs.map((r) => (
                   <li key={r.id}>
@@ -119,7 +119,7 @@ export function TicketSheet() {
 
             {t.url && (
               <a href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline">
-                Apri in Notion <ExternalLink className="size-3.5" />
+                Open in Notion <ExternalLink className="size-3.5" />
               </a>
             )}
           </div>

@@ -34,7 +34,7 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
   const checkpoint = a.kind === "checkpoint"
 
   return (
-    <article className="space-y-2 rounded-sm border border-lamp-amber/60 bg-lamp-amber/10 p-3" aria-label="Richiesta in attesa">
+    <article className="space-y-2 rounded-sm border border-lamp-amber/60 bg-lamp-amber/10 p-3" aria-label="Request waiting">
       <header className="flex items-start gap-2">
         <ShieldQuestion className="mt-0.5 size-4 shrink-0 text-lamp-amber" aria-hidden />
         <div className="min-w-0">
@@ -52,24 +52,24 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
           autoFocus
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Cosa deve fare invece? (l'agente lo legge)"
-          aria-label="Motivo del rifiuto"
+          placeholder="What should it do instead? (the agent reads this)"
+          aria-label="Reason for refusing"
           className="h-8 w-full rounded-md border bg-background px-2 text-sm"
         />
       )}
       <div className="flex flex-wrap gap-2">
         {checkpoint ? (
-          <Button size="sm" disabled={pending} onClick={() => decide("allow", "Approvato")}><Check /> Approva</Button>
+          <Button size="sm" disabled={pending} onClick={() => decide("allow", "Approved")}><Check /> Approve</Button>
         ) : (
           <>
-            <Button size="sm" disabled={pending} onClick={() => decide("allow", "Consentito")}><Check /> Consenti</Button>
-            <Button size="sm" variant="outline" disabled={pending} onClick={() => decide("allow_run", "Consentito per questo run")}>Consenti per questo run</Button>
+            <Button size="sm" disabled={pending} onClick={() => decide("allow", "Allowed")}><Check /> Allow</Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => decide("allow_run", "Allowed for this run")}>Allow for this run</Button>
           </>
         )}
         {denying ? (
-          <Button size="sm" variant="destructive" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rifiutato" : "Negato")}><X /> {checkpoint ? "Conferma rifiuto" : "Conferma rifiuto"}</Button>
+          <Button size="sm" variant="destructive" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rejected" : "Denied")}><X /> {checkpoint ? "Confirm rejection" : "Confirm denial"}</Button>
         ) : (
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setDenying(true)}><X /> {checkpoint ? "Rifiuta" : "Nega"}</Button>
+          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setDenying(true)}><X /> {checkpoint ? "Reject" : "Deny"}</Button>
         )}
       </div>
     </article>

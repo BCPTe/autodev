@@ -35,7 +35,7 @@ function Gate() {
   if (isError || !data) {
     return (
       <main className="grid min-h-screen place-items-center px-4 text-center">
-        <p className="max-w-sm text-muted-foreground">Il server non risponde. Avvia la dashboard con <code className="font-mono">uv run autodev serve</code> e ricarica la pagina.</p>
+        <p className="max-w-sm text-muted-foreground">The server is not responding. Start the dashboard with <code className="font-mono">uv run autodev serve</code> and reload the page.</p>
       </main>
     )
   }

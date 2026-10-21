@@ -12,24 +12,24 @@ export function Runs() {
   const navigate = useNavigate()
   return (
     <>
-      <PageHeader title="Attività">Triage e fix lanciati da terminale o dalla dashboard</PageHeader>
+      <PageHeader title="Activity">Triage, fix and check runs started from the terminal or the dashboard</PageHeader>
       {isLoading && <Skeleton className="h-64 w-full" />}
       {data && data.runs.length === 0 && (
-        <p className="py-6 text-muted-foreground">Ancora nessuna attività. Lancia <code className="font-mono">uv run autodev triage</code> e comparirà qui.</p>
+        <p className="py-6 text-muted-foreground">No activity yet. Run <code className="font-mono">uv run autodev triage</code> and it will show up here.</p>
       )}
       {data && data.runs.length > 0 && (
         <div className="overflow-x-auto rounded-sm border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Stato</TableHead>
-                <TableHead>Tipo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Ticket</TableHead>
-                <TableHead>Modello</TableHead>
-                <TableHead>Esito</TableHead>
-                <TableHead className="text-right">Durata</TableHead>
-                <TableHead className="text-right">Costo</TableHead>
-                <TableHead>Avvio</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Outcome</TableHead>
+                <TableHead className="text-right">Duration</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead>Started</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

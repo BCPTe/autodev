@@ -33,7 +33,7 @@ export function useAttention() {
     const items = [
       ...data.approvals.map((a) => ({ key: `a${a.id}`, text: a.title })),
       ...data.inbox.filter((i) => i.state !== "needs_info").map((i) => ({ key: `t${i.ticket.id}:${i.state}`, text: i.ticket.title })),
-      ...data.recent_problems.map((r) => ({ key: `r${r.id}`, text: `${r.ticket_title}: ${r.error ?? "non riuscito"}` })),
+      ...data.recent_problems.map((r) => ({ key: `r${r.id}`, text: `${r.ticket_title}: ${r.error ?? "did not succeed"}` })),
     ]
     document.title = data.approvals.length ? `(${data.approvals.length}) autodev` : "autodev"
     if (seen.current && browserNotificationsOn() && document.hidden) {

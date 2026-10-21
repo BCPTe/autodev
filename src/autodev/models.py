@@ -14,9 +14,9 @@ class Status(StrEnum):
 
 
 class Risk(StrEnum):
-    LOW = "Basso"
-    MEDIUM = "Medio"
-    HIGH = "Alto"
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
 
 
 class Ticket(BaseModel):

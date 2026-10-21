@@ -6,13 +6,13 @@ import { money, shortModel } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 function DayBars({ days, cap }: { days: { day: string; cost: number; runs: number }[]; cap: number }) {
-  if (days.length === 0) return <p className="text-muted-foreground">Nessuna spesa registrata negli ultimi 30 giorni.</p>
+  if (days.length === 0) return <p className="text-muted-foreground">No spending recorded in the last 30 days.</p>
   const max = Math.max(cap, ...days.map((d) => d.cost)) * 1.05
   return (
     <figure>
       <div className="relative flex h-40 items-end gap-1.5 border-b" role="img" aria-label={`Spesa giornaliera, massimo ${money(Math.max(...days.map((d) => d.cost)))}`}>
         <div className="absolute inset-x-0 border-t border-dashed border-lamp-red/70" style={{ bottom: `${(cap / max) * 100}%` }} />
-        <span className="absolute right-0 text-xs text-lamp-red" style={{ bottom: `calc(${(cap / max) * 100}% + 2px)` }}>tetto {money(cap)}</span>
+        <span className="absolute right-0 text-xs text-lamp-red" style={{ bottom: `calc(${(cap / max) * 100}% + 2px)` }}>cap {money(cap)}</span>
         {days.map((d) => (
           <div key={d.day} className="group relative flex h-full min-w-2 flex-1 items-end">
             <div className={cn("w-full rounded-t-sm", d.cost >= cap ? "bg-lamp-red" : "bg-primary")} style={{ height: `${(d.cost / max) * 100}%`, minHeight: d.cost > 0 ? 2 : 0 }} />
@@ -34,48 +34,48 @@ export function Costs() {
 
   return (
     <>
-      <PageHeader title="Costi">Valori equivalenti in dollari: con l'abbonamento non li paghi, ma consumano la tua quota</PageHeader>
+      <PageHeader title="Costi">Dollar-equivalent values: with a subscription you do not pay them, but they use your quota</PageHeader>
 
       <section className="grid gap-x-10 gap-y-6 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Oggi</p>
+          <p className="text-xs text-muted-foreground">Today</p>
           <p className="font-display text-3xl tabular-nums">{money(c.today)} <span className="text-lg text-muted-foreground">/ {money(c.daily_cap)}</span></p>
-          <div role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Budget giornaliero" className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Daily budget" className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
             <div className={cn("h-full", pct >= 80 ? "bg-lamp-red" : "bg-primary")} style={{ width: `${pct}%` }} />
           </div>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Totale registrato</p>
+          <p className="text-xs text-muted-foreground">Total recorded</p>
           <p className="font-display text-3xl tabular-nums">{money(c.total)}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Tetto per ticket</p>
+          <p className="text-xs text-muted-foreground">Cap per ticket</p>
           <p className="font-display text-3xl tabular-nums">{money(c.ticket_cap)}</p>
         </div>
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-xl font-semibold">Ultimi 30 giorni</h2>
+        <h2 className="mb-3 text-xl font-semibold">Last 30 days</h2>
         <DayBars days={c.by_day} cap={c.daily_cap} />
       </section>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <section>
-          <h2 className="mb-2 text-xl font-semibold">Per modello</h2>
+          <h2 className="mb-2 text-xl font-semibold">By model</h2>
           <Table>
-            <TableHeader><TableRow><TableHead>Modello</TableHead><TableHead className="text-right">Run</TableHead><TableHead className="text-right">Costo</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Model</TableHead><TableHead className="text-right">Run</TableHead><TableHead className="text-right">Cost</TableHead></TableRow></TableHeader>
             <TableBody>
               {c.by_model.map((m) => (
                 <TableRow key={m.model}><TableCell>{shortModel(m.model)}</TableCell><TableCell className="text-right tabular-nums">{m.runs}</TableCell><TableCell className="text-right tabular-nums">{money(m.cost)}</TableCell></TableRow>
               ))}
-              {c.by_model.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">Nessun dato.</TableCell></TableRow>}
+              {c.by_model.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">No data.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </section>
         <section>
-          <h2 className="mb-2 text-xl font-semibold">Ticket più costosi</h2>
+          <h2 className="mb-2 text-xl font-semibold">Most expensive tickets</h2>
           <Table>
-            <TableHeader><TableRow><TableHead>Ticket</TableHead><TableHead className="text-right">Run</TableHead><TableHead className="text-right">Costo</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Ticket</TableHead><TableHead className="text-right">Run</TableHead><TableHead className="text-right">Cost</TableHead></TableRow></TableHeader>
             <TableBody>
               {c.by_ticket.map((t) => (
                 <TableRow key={t.ticket_id}>
@@ -84,7 +84,7 @@ export function Costs() {
                   <TableCell className={cn("text-right tabular-nums", t.cost >= c.ticket_cap && "text-lamp-red")}>{money(t.cost)}</TableCell>
                 </TableRow>
               ))}
-              {c.by_ticket.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">Nessun dato.</TableCell></TableRow>}
+              {c.by_ticket.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">No data.</TableCell></TableRow>}
             </TableBody>
           </Table>
         </section>

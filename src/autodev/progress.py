@@ -10,18 +10,18 @@ def describe_tool(name: str, tool_input: dict[str, Any], cwd: str) -> str:
         return os.path.relpath(path, cwd) if os.path.isabs(path) and path.startswith(cwd) else path
 
     if name == "Read":
-        return f"legge {rel(tool_input.get('file_path', '?'))}"
+        return f"reads {rel(tool_input.get('file_path', '?'))}"
     if name == "Grep":
         where = tool_input.get("path")
-        return f"cerca '{tool_input.get('pattern', '?')}'" + (f" in {rel(where)}" if where else "")
+        return f"searches '{tool_input.get('pattern', '?')}'" + (f" in {rel(where)}" if where else "")
     if name == "Glob":
-        return f"elenca {tool_input.get('pattern', '?')}"
+        return f"lists {tool_input.get('pattern', '?')}"
     if name in ("Edit", "Write"):
-        verb = "modifica" if name == "Edit" else "scrive"
+        verb = "edits" if name == "Edit" else "writes"
         return f"{verb} {rel(tool_input.get('file_path', '?'))}"
     if name == "Bash":
         cmd = " ".join(str(tool_input.get("command", "?")).split())
-        return f"esegue {cmd[:90]}"
+        return f"runs {cmd[:90]}"
     return name
 
 

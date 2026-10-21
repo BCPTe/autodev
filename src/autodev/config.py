@@ -79,7 +79,7 @@ class Autonomy(BaseModel):
     default_mode: Literal["auto", "supervised", "manual", "paused"] = "manual"
     poll_seconds: int = 60
     retry_cooldown_seconds: int = 1800
-    auto_approve_risks: list[str] = ["Basso", "Medio"]
+    auto_approve_risks: list[str] = ["Low", "Medium"]
     # Points where a run waits for a human (never in auto mode): "after_agent" = the agent says it is
     # done, before the verification gate; "before_pr" = verified, before the push and the pull request.
     checkpoints: list[Literal["after_agent", "before_pr"]] = ["before_pr"]
@@ -93,7 +93,7 @@ class Autonomy(BaseModel):
 
 class ProjectConfig(BaseModel):
     name: str = ""
-    language: str = "Italian"
+    language: str = "English"
     branch_prefix: str = "autodev"
     repo: str
     base_branch: str

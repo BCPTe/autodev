@@ -76,7 +76,7 @@ def checks_job(cfg: ProjectConfig, tracker, ticket: Ticket):
     async def work(report: Report):
         results = []
         for check in cfg.checks:
-            report(f"esegue {check.name}...")
+            report(f"running {check.name}...")
             result = await asyncio.to_thread(run_check, cfg, check, Path(cfg.local_path))
             report(result.line())
             results.append(result)
@@ -113,7 +113,7 @@ class Engine:
 
     def set_mode(self, mode: str, actor: str = "user") -> None:
         if mode not in MODES:
-            raise ValueError(f"modalità sconosciuta: {mode}")
+            raise ValueError(f"unknown mode: {mode}")
         if mode != self.mode:
             self.db.set_setting(self._k("mode"), mode)
             self.db.audit(actor, "mode", detail=mode)
@@ -137,7 +137,7 @@ class Engine:
 
     def set_quiet_hours(self, spec: str, actor: str = "user") -> None:
         if spec and not QUIET_RE.match(spec):
-            raise ValueError("le ore di silenzio vanno scritte come 22:00-07:00 (vuoto per toglierle)")
+            raise ValueError("quiet hours must look like 22:00-07:00 (empty to remove them)")
         self.db.set_setting(self._k("quiet_hours"), spec)
         self.db.audit(actor, "quiet_hours", detail=spec or "off")
 
@@ -155,7 +155,7 @@ class Engine:
 
     def set_daily_cap(self, usd: float, actor: str = "user") -> None:
         if not 0 < usd <= 1000:
-            raise ValueError("il tetto giornaliero deve essere tra 0 e 1000 dollari")
+            raise ValueError("the daily cap must be between 0 and 1000 dollars")
         self.db.set_setting(self._k("daily_budget_usd"), str(usd))
         self.db.audit(actor, "daily_cap", detail=f"{usd:.2f}")
         self.notice = None
@@ -175,7 +175,7 @@ class Engine:
             "busy": self.busy(),
             "daily_cap": cap,
             "spent_today": spent,
-            "blocked": self.notice or (f"tetto giornaliero raggiunto (${spent:.2f} su ${cap:.2f})" if spent >= cap else None),
+            "blocked": self.notice or (f"daily cap reached (${spent:.2f} of ${cap:.2f})" if spent >= cap else None),
             "auto_approve_risks": self.cfg.autonomy.auto_approve_risks,
             "quiet_hours": self.quiet_hours,
             "quiet": in_quiet_hours(self.quiet_hours, self._clock()),
@@ -188,7 +188,7 @@ class Engine:
     # ---- starting and stopping jobs ------------------------------------------------------
     async def start(self, ticket_id: str, kind: str, actor: str = "user") -> None:
         if kind not in ("triage", "fix"):
-            raise Refused(f"tipo di job sconosciuto: {kind}")
+            raise Refused(f"unknown job type: {kind}")
         self._check_can_start(actor)
         self._launching = True
         try:
@@ -196,8 +196,8 @@ class Engine:
             allowed = TRIAGE_FROM if kind == "triage" else FIX_FROM
             if ticket.status not in allowed:
                 raise Refused(
-                    f"il ticket è in stato '{self.cfg.tracker.status_map[ticket.status]}': "
-                    + ("serve un ticket da analizzare" if kind == "triage" else "approvalo prima (stato 'In lavorazione')")
+                    f"the ticket is in state '{self.cfg.tracker.status_map[ticket.status]}': "
+                    + ("it needs a ticket that can be analysed" if kind == "triage" else "approve it first (state 'In progress')")
                 )
             self.db.audit(actor, f"start_{kind}", ticket.id, ticket.title)
             task = asyncio.ensure_future(self._execute(ticket, kind))
@@ -209,23 +209,23 @@ class Engine:
 
     def _check_can_start(self, actor: str, *, respect_my_turn: bool = True) -> None:
         if self.mode == "paused":
-            raise Refused("la modalità è 'In pausa': riattivala per far partire un agente")
+            raise Refused("the mode is 'Paused': switch it to start an agent")
         if self.my_turn and respect_my_turn:
-            raise Refused("è il tuo turno: finché non lo restituisci nessun agente parte")
+            raise Refused("the checkout is yours: no agent starts until you hand it back")
         if self.busy():
-            raise Refused("un agente è già al lavoro: ne gira uno alla volta sul checkout")
+            raise Refused("an agent is already working: only one runs at a time on the checkout")
         spent, cap = spent_today(self.db, self.project), daily_cap(self.db, self.cfg.limits.daily_budget_usd, self.project)
         if spent >= cap:
-            raise Refused(f"tetto giornaliero raggiunto (${spent:.2f} su ${cap:.2f}): alzalo nelle impostazioni")
+            raise Refused(f"daily cap reached (${spent:.2f} of ${cap:.2f}): raise it in Settings")
 
     async def start_checks(self, actor: str = "user") -> None:
         """Runs the project's configured checks (tests, typecheck) on the checkout as it is now."""
         if not self.cfg.checks:
-            raise Refused("nessun controllo configurato in `checks` nel file del progetto")
+            raise Refused("no checks configured: add `checks` to the project file")
         self._check_can_start(actor, respect_my_turn=False)
         self._launching = True
         self.db.audit(actor, "start_checks", None, "")
-        task = asyncio.ensure_future(self._execute(Ticket(id="repo", title="Controlli sul checkout", status=Status.NEW), "checks"))
+        task = asyncio.ensure_future(self._execute(Ticket(id="repo", title="Checks on the checkout", status=Status.NEW), "checks"))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
@@ -244,11 +244,11 @@ class Engine:
             self.notify(*self._finished_message(kind, ticket, summarize(result)))
         except DailyCapReached as e:
             self.notice = str(e)
-            self.notify("autodev: tetto giornaliero raggiunto", str(e))
+            self.notify("autodev: daily cap reached", str(e))
         except RunCancelled:
             pass
         except Exception as e:  # run_tracked has already recorded the failure on the run
-            self.notify(f"autodev: {kind} fallito", f"{ticket.title}: {e}")
+            self.notify(f"autodev: {kind} failed", f"{ticket.title}: {e}")
         finally:
             self._launching = False
             if control.run_id is not None:
@@ -257,9 +257,9 @@ class Engine:
 
     @staticmethod
     def _finished_message(kind: str, ticket: Ticket, summary: RunSummary) -> tuple[str, str]:
-        verdict = {"review": "pronto da rivedere", "escalated": "serve un tuo intervento", "analyzed": "analizzato, aspetta il tuo ok",
-                   "needs_info": "servono più informazioni", "passed": "controlli passati", "failed": "controlli falliti"}.get(summary.outcome, summary.outcome)
-        return f"autodev: {kind} finito", f"{ticket.title}: {verdict}"
+        verdict = {"review": "ready for review", "escalated": "needs your attention", "analyzed": "analysed, waiting for your approval",
+                   "needs_info": "needs more information", "passed": "checks passed", "failed": "checks failed"}.get(summary.outcome, summary.outcome)
+        return f"autodev: {kind} finished", f"{ticket.title}: {verdict}"
 
     def _release(self, run_id: int, control: RunControl) -> None:
         """The run row exists now: the database reports busy by itself, and the run can be talked to."""
@@ -286,7 +286,7 @@ class Engine:
                 await self.housekeeping()
                 await self.tick()
             except Exception as e:  # a Notion hiccup must not kill the loop
-                self.notice = f"controllo automatico non riuscito: {e}"
+                self.notice = f"automatic check failed: {e}"
             await asyncio.sleep(self.cfg.autonomy.poll_seconds)
 
     async def housekeeping(self) -> list[str]:
@@ -305,7 +305,7 @@ class Engine:
             if pr["state"] == "merged":
                 await self.tracker.set_status(t.id, Status.CLOSED)
                 self.db.audit("auto", "merged", t.id, f"PR {pr['number']}")
-                self.notify("autodev: pull request unita", t.title)
+                self.notify("autodev: pull request merged", t.title)
                 if self.cfg.autonomy.auto_cleanup_branches and not self.busy():
                     from autodev.server import repo
 
@@ -314,7 +314,7 @@ class Engine:
                     except repo.RepoError:
                         pass
             else:
-                await self.tracker.update(t.id, agent_note=f"La PR #{pr['number']} è stata chiusa senza essere unita")
+                await self.tracker.update(t.id, agent_note=f"PR #{pr['number']} was closed without being merged")
                 await self.tracker.set_status(t.id, Status.ESCALATED)
                 self.db.audit("auto", "pr_closed", t.id, f"PR {pr['number']}")
             done.append(t.id)
@@ -342,7 +342,7 @@ class Engine:
             for t in tickets:
                 if t.status == Status.ANALYZED and t.risk in self.cfg.autonomy.auto_approve_risks:
                     await self.tracker.set_status(t.id, Status.IN_PROGRESS)
-                    self.db.audit("auto", "approve", t.id, f"rischio {t.risk}")
+                    self.db.audit("auto", "approve", t.id, f"risk {t.risk}")
                     t.status = Status.IN_PROGRESS
                     self.on_change()
 

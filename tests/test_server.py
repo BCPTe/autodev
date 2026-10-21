@@ -19,7 +19,7 @@ class FakeTracker:
     def __init__(self):
         self.calls = 0
         self.tickets = [
-            Ticket(id="t1", title="Bug uno", status=Status.ANALYZED, area="Autofill", risk="Medio", url="https://n/t1", cost_usd=0.5),
+            Ticket(id="t1", title="Bug uno", status=Status.ANALYZED, area="Autofill", risk="Medium", url="https://n/t1", cost_usd=0.5),
             Ticket(id="t2", title="Bug due", status=Status.IN_PROGRESS, model="Auto"),
             Ticket(id="t3", title="Bug tre", status=Status.NEW),
         ]
@@ -302,7 +302,7 @@ def test_comment_is_posted_as_a_person_and_empty_ones_are_refused(client, env):
 def test_start_is_refused_with_the_reason_when_the_mode_is_paused(client):
     client.put("/api/control", json={"mode": "paused"})
     r = client.post("/api/tickets/t3/start", json={"kind": "triage"})
-    assert r.status_code == 409 and "pausa" in r.json()["detail"]
+    assert r.status_code == 409 and "Paused" in r.json()["detail"]
     assert client.post("/api/tickets/t3/start", json={"kind": "nope"}).status_code == 422
 
 
@@ -338,14 +338,14 @@ def test_pending_approvals_are_listed_and_decided_through_the_live_control(clien
     app.state.engine.controls[run_id] = control
 
     async def scenario():
-        waiting = asyncio.ensure_future(control.ask("permission", "esegue docker ps", {"tool": "Bash"}))
+        waiting = asyncio.ensure_future(control.ask("permission", "runs docker ps", {"tool": "Bash"}))
         await asyncio.sleep(0.05)
         return waiting
 
     loop = asyncio.new_event_loop()
     waiting = loop.run_until_complete(scenario())
     listed = client.get("/api/approvals").json()["approvals"]
-    assert [(a["title"], a["ticket_id"]) for a in listed] == [("esegue docker ps", "t1")]
+    assert [(a["title"], a["ticket_id"]) for a in listed] == [("runs docker ps", "t1")]
     assert client.get("/api/overview").json()["approvals"][0]["id"] == listed[0]["id"]
     assert client.get(f"/api/runs/{run_id}").json()["interactive"]["state"] == "approval"
     assert client.post(f"/api/approvals/{listed[0]['id']}", json={"decision": "maybe"}).status_code == 422

@@ -49,11 +49,11 @@ class Auth:
 
     def set_password(self, password: str, code: str) -> None:
         if self.configured:
-            raise PermissionError("password già impostata")
+            raise PermissionError("password already set")
         if not self.setup_code or not hmac.compare_digest(code or "", self.setup_code):
-            raise PermissionError("codice di configurazione errato")
+            raise PermissionError("wrong setup code")
         if len(password) < MIN_PASSWORD:
-            raise ValueError(f"la password deve avere almeno {MIN_PASSWORD} caratteri")
+            raise ValueError(f"the password must be at least {MIN_PASSWORD} characters")
         self.db.set_setting("password_hash", hash_password(password))
         self.setup_code = None
 

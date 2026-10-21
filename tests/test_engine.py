@@ -105,7 +105,7 @@ async def test_only_one_agent_runs_at_a_time(tmp_path, fakes):
     gate.clear()
     e, _, _ = make(tmp_path, [ticket("a", Status.NEW), ticket("b", Status.NEW)])
     await e.start("a", "triage")
-    with pytest.raises(Refused, match="già al lavoro"):
+    with pytest.raises(Refused, match="already working"):
         await e.start("b", "triage")
     gate.set()
     await e.wait_idle()
@@ -114,11 +114,11 @@ async def test_only_one_agent_runs_at_a_time(tmp_path, fakes):
 async def test_paused_and_my_turn_refuse_every_start(tmp_path, fakes):
     e, _, _ = make(tmp_path, [ticket("a", Status.NEW)])
     e.set_mode("paused")
-    with pytest.raises(Refused, match="pausa"):
+    with pytest.raises(Refused, match="Paused"):
         await e.start("a", "triage")
     e.set_mode("manual")
     e.set_my_turn(True)
-    with pytest.raises(Refused, match="tuo turno"):
+    with pytest.raises(Refused, match="is yours"):
         await e.start("a", "triage")
     e.set_my_turn(False)
     await e.start("a", "triage")
@@ -127,7 +127,7 @@ async def test_paused_and_my_turn_refuse_every_start(tmp_path, fakes):
 
 async def test_fix_needs_the_ticket_to_be_approved_first(tmp_path, fakes):
     e, _, _ = make(tmp_path, [ticket("a", Status.ANALYZED)])
-    with pytest.raises(Refused, match="approvalo"):
+    with pytest.raises(Refused, match="approve it first"):
         await e.start("a", "fix")
 
 
@@ -135,9 +135,9 @@ async def test_daily_cap_blocks_starts(tmp_path, fakes):
     e, db, _ = make(tmp_path, [ticket("a", Status.NEW)])
     e.set_daily_cap(1.0)
     db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, cost_usd) VALUES('demo','z','z','fix','done',?,1.5)", (__import__("time").time(),))
-    with pytest.raises(Refused, match="tetto giornaliero"):
+    with pytest.raises(Refused, match="daily cap"):
         await e.start("a", "triage")
-    assert "tetto giornaliero" in e.state()["blocked"]
+    assert "daily cap" in e.state()["blocked"]
 
 
 async def test_supervised_triages_and_fixes_only_what_is_authorized_and_approved(tmp_path, fakes):
@@ -145,7 +145,7 @@ async def test_supervised_triages_and_fixes_only_what_is_authorized_and_approved
     e, db, tracker = make(tmp_path, [
         ticket("new-ok", Status.NEW),
         ticket("new-unauthorized", Status.NEW, authorized=False),
-        ticket("analyzed", Status.ANALYZED, risk="Basso"),
+        ticket("analyzed", Status.ANALYZED, risk="Low"),
     ])
     e.set_mode("supervised")
     assert await e.tick() == "triage new-ok"
@@ -164,8 +164,8 @@ async def test_fix_goes_before_triage_when_both_are_waiting(tmp_path, fakes):
 
 async def test_auto_approves_low_and_medium_risk_but_not_high(tmp_path, fakes):
     e, db, tracker = make(tmp_path, [
-        ticket("low", Status.ANALYZED, risk="Basso"),
-        ticket("high", Status.ANALYZED, risk="Alto"),
+        ticket("low", Status.ANALYZED, risk="Low"),
+        ticket("high", Status.ANALYZED, risk="High"),
     ])
     e.set_mode("auto")
     assert await e.tick() == "fix low"
@@ -251,7 +251,7 @@ async def test_finished_runs_and_requests_raise_a_desktop_notification(tmp_path,
     await e.start("a", "triage")
     await e.wait_idle()
     assert len(desktop_notifications) == 1
-    assert desktop_notifications[0][-2:] == ["autodev: triage finito", "[demo] Ticket a: analizzato, aspetta il tuo ok"]
+    assert desktop_notifications[0][-2:] == ["autodev: triage finished", "[demo] Ticket a: analysed, waiting for your approval"]
     e.set_notifications(False)
     e.notify("x", "y")
     assert len(desktop_notifications) == 1
@@ -273,7 +273,7 @@ async def test_a_merged_pull_request_closes_its_ticket_and_a_closed_one_escalate
     assert sorted(await e.housekeeping()) == ["c", "m"]
     assert (tracker.tickets["m"].status, tracker.tickets["c"].status, tracker.tickets["o"].status, tracker.tickets["x"].status) == (
         Status.CLOSED, Status.ESCALATED, Status.REVIEW, Status.ANALYZED)
-    assert "chiusa senza essere unita" in tracker.tickets["c"].agent_note
+    assert "closed without being merged" in tracker.tickets["c"].agent_note
     assert {r["action"] for r in db.query("SELECT action FROM actions")} == {"merged", "pr_closed"}
 
 
@@ -282,7 +282,7 @@ async def test_housekeeping_does_nothing_when_github_is_unreachable(tmp_path, mo
     e.cfg.pr.slug = "o/r"
 
     async def broken(cfg, prefix, limit=30):
-        raise RuntimeError("GITHUB_TOKEN mancante")
+        raise RuntimeError("GITHUB_TOKEN missing")
 
     monkeypatch.setattr(github, "list_pulls", broken)
     assert await e.housekeeping() == []

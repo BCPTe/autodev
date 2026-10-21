@@ -7,10 +7,10 @@ import { put, post, type Mode } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 export const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: "auto", label: "Auto", hint: "Analizza, approva i ticket a rischio consentito e li lavora da solo" },
-  { id: "supervised", label: "Supervisionato", hint: "Analizza e lavora da solo, ma sei tu ad approvare il passaggio in lavorazione" },
-  { id: "manual", label: "Manuale", hint: "Non parte niente finché non premi Avvia" },
-  { id: "paused", label: "In pausa", hint: "Non parte niente; i lavori in corso finiscono, oppure fermali" },
+  { id: "auto", label: "Auto", hint: "Analyses, approves tickets of an allowed risk level and works on them by itself" },
+  { id: "supervised", label: "Supervised", hint: "Analyses and works by itself, but you approve moving a ticket to In progress" },
+  { id: "manual", label: "Manual", hint: "Nothing starts until you press Start" },
+  { id: "paused", label: "Paused", hint: "Nothing starts; running jobs finish, or stop them" },
 ]
 
 export function ModeSwitch() {
@@ -19,7 +19,7 @@ export function ModeSwitch() {
   if (!data) return null
   const mode = data.control.mode
   return (
-    <div role="radiogroup" aria-label="Autonomia" className="flex overflow-hidden rounded-md border">
+    <div role="radiogroup" aria-label="Autonomy" className="flex overflow-hidden rounded-md border">
       {MODES.map((m) => (
         <button
           key={m.id}
@@ -27,7 +27,7 @@ export function ModeSwitch() {
           aria-checked={mode === m.id}
           title={m.hint}
           disabled={pending}
-          onClick={() => mode !== m.id && act(() => put("/api/control", { mode: m.id }), `Modalità: ${m.label}`)}
+          onClick={() => mode !== m.id && act(() => put("/api/control", { mode: m.id }), `Mode: ${m.label}`)}
           className={cn(
             "px-3 py-1.5 text-[13px] transition-colors not-last:border-r",
             mode === m.id
@@ -53,10 +53,10 @@ export function MyTurn() {
       size="sm"
       disabled={pending}
       aria-pressed={on}
-      title={on ? "Stai lavorando nel checkout: gli agenti aspettano. Premi per restituirlo" : "Prendi il checkout: finché non lo restituisci nessun agente parte"}
-      onClick={() => act(() => put("/api/control", { my_turn: !on }), on ? "Checkout restituito agli agenti" : "Il checkout è tuo")}
+      title={on ? "You are working in the checkout: agents wait. Press to hand it back" : "Take the checkout: no agent starts until you hand it back"}
+      onClick={() => act(() => put("/api/control", { my_turn: !on }), on ? "Checkout handed back to the agents" : "The checkout is yours")}
     >
-      <Hand /> {on ? "Checkout tuo" : "Checkout a me"}
+      <Hand /> {on ? "Checkout is yours" : "Take checkout"}
     </Button>
   )
 }
@@ -77,9 +77,9 @@ export function StopAll() {
       variant="destructive"
       size="sm"
       disabled={pending}
-      onClick={() => (armed ? (setArmed(false), act(() => post("/api/control/stop-all", {}), "Agenti fermati")) : setArmed(true))}
+      onClick={() => (armed ? (setArmed(false), act(() => post("/api/control/stop-all", {}), "Agents stopped")) : setArmed(true))}
     >
-      <OctagonX /> {armed ? "Conferma: ferma tutto" : "Ferma tutto"}
+      <OctagonX /> {armed ? "Confirm: stop all" : "Stop all"}
     </Button>
   )
 }
@@ -89,10 +89,10 @@ export function Notice() {
   const c = data?.control
   if (!c) return null
   const lines = [
-    c.blocked && `Automazione ferma: ${c.blocked}`,
-    c.my_turn && "È il tuo turno: nessun agente parte finché non restituisci il checkout.",
-    c.mode === "paused" && "Modalità in pausa: nessun agente parte.",
-    c.quiet && c.mode !== "paused" && `Ore di silenzio (${c.quiet_hours}): niente parte da solo, ma puoi avviare a mano.`,
+    c.blocked && `Automation is stopped: ${c.blocked}`,
+    c.my_turn && "The checkout is yours: no agent starts until you hand it back.",
+    c.mode === "paused" && "Paused mode: no agent starts.",
+    c.quiet && c.mode !== "paused" && `Quiet hours (${c.quiet_hours}): nothing starts by itself, but you can start things by hand.`,
   ].filter(Boolean) as string[]
   if (!lines.length) return null
   return (

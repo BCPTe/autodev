@@ -27,7 +27,7 @@ Verdicts:
 `questions` are ONLY for blocking questions, and only with verdict needs_info: without the answer a fix \
 would be a guess. If the verdict is ready, `questions` must be empty; put the interpretations you assumed and \
 any non-blocking doubts in `assumptions` instead, so a human can confirm them in review. Never ask what the \
-ticket or its comments already answer. Refer to people neutrally ("il richiedente"), never by a guessed name.
+ticket or its comments already answer. Refer to people neutrally ("the requester"), never by a guessed name.
 
 Confidence: `high` only if you read the relevant code and the verdict follows from it; `low` if you could not \
 find the relevant code or the situation is ambiguous.
@@ -45,7 +45,7 @@ repository root.
 class TriageResult(BaseModel):
     verdict: Literal["needs_info", "not_reproducible", "ready"]
     confidence: Literal["high", "low"]
-    risk: Literal["Basso", "Medio", "Alto"]
+    risk: Literal["Low", "Medium", "High"]
     analysis: str
     suspected_files: list[str] = []
     questions: list[str] = []
@@ -121,23 +121,23 @@ async def run_triage(
     for i, model in enumerate(models):
         progress = Progress(model.replace("claude-", "").replace("-5-5", ""), report) if report else None
         if progress:
-            progress("avvio analisi")
+            progress("starting analysis")
         try:
             result, info = await _run(cfg, ticket, model, progress, (budget_usd - sum(r.cost_usd for r in runs)) if budget_usd else None)
         except RuntimeError as e:
             last_error = e
             if progress:
-                progress(f"fallito ({e})")
+                progress(f"failed ({e})")
             continue
         info.escalated = i > 0
         runs.append(info)
         result = normalize(result)
         if progress:
-            progress(f"fine: {result.verdict}, confidenza {result.confidence}, {info.turns} turni, ${info.cost_usd:.2f}")
+            progress(f"done: {result.verdict}, confidence {result.confidence}, {info.turns} turns, ${info.cost_usd:.2f}")
         if result.confidence == "high" or i == len(models) - 1:
             return result, runs
         if progress:
-            progress("confidenza bassa, passo al modello successivo")
+            progress("low confidence, moving to the next model")
     raise last_error or RuntimeError("triage produced no result")
 
 

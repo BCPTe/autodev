@@ -34,15 +34,15 @@ def tickets() -> list[Ticket]:
         return Ticket(id=f"t{i}", title=title, status=status, url=f"https://notion.so/t{i}", updated_at="2026-10-21T10:00:00+00:00", **kw)
 
     return [
-        t(1, "Il pulsante Scarica non scarica nulla", Status.NEW, area="Export PDF", priority="Media"),
-        t(2, "Firma del direttore obbligatoria solo se il progettista ha il nome", Status.ANALYZED, area="Autofill", risk="Medio", cost_usd=0.16),
-        t(3, "Telefono o cellulare del progettista: basta uno", Status.ANALYZED, area="Autofill", risk="Basso", cost_usd=0.12),
-        t(4, "Required and dependency fields logic", Status.IN_PROGRESS, area="Autofill", risk="Medio", model="Auto", attempts=1, cost_usd=3.56),
-        t(5, "Il wizard perde i dati al ricarico dello step 4", Status.REVIEW, area="Wizard", risk="Basso", attempts=1, cost_usd=1.4, branch="autodev/wizard-perde-dati-a1b2c3", verification="Passata", pr_url="https://github.com/o/r/pull/12"),
-        t(6, "Esporta ZIP vuoto con documenti secondari", Status.NEEDS_INFO, area="Export PDF", cost_usd=0.62),
-        t(7, "Billing: il piano non si aggiorna dopo il pagamento", Status.ESCALATED, area="Billing", risk="Alto", attempts=3, cost_usd=5.9, agent_note="tetto di spesa per ticket raggiunto ($5.90 su $6.00)"),
-        t(8, "Rubrica: duplicati dopo l'import", Status.CLOSED, area="Rubrica", cost_usd=0.9, verification="Passata"),
-        t(9, "Il tema scuro dell'admin ha il testo illeggibile", Status.CLOSED, area="Admin"),
+        t(1, "The Download button downloads nothing", Status.NEW, area="Export PDF", priority="Medium"),
+        t(2, "Director signature required only if the designer has a name", Status.ANALYZED, area="Autofill", risk="Medium", cost_usd=0.16),
+        t(3, "Designer phone or mobile: one is enough", Status.ANALYZED, area="Autofill", risk="Low", cost_usd=0.12),
+        t(4, "Required and dependency fields logic", Status.IN_PROGRESS, area="Autofill", risk="Medium", model="Auto", attempts=1, cost_usd=3.56),
+        t(5, "The wizard loses data when step 4 is reloaded", Status.REVIEW, area="Wizard", risk="Low", attempts=1, cost_usd=1.4, branch="autodev/wizard-perde-dati-a1b2c3", verification="Passed", pr_url="https://github.com/o/r/pull/12"),
+        t(6, "ZIP export is empty with secondary documents", Status.NEEDS_INFO, area="Export PDF", cost_usd=0.62),
+        t(7, "Billing: the plan does not update after payment", Status.ESCALATED, area="Billing", risk="High", attempts=3, cost_usd=5.9, agent_note="per-ticket spending cap reached ($5.90 of $6.00)"),
+        t(8, "Address book: duplicates after import", Status.CLOSED, area="Rubrica", cost_usd=0.9, verification="Passed"),
+        t(9, "The admin dark theme has unreadable text", Status.CLOSED, area="Admin"),
     ]
 
 
@@ -66,17 +66,17 @@ class FakeTracker:
 
     async def detail(self, ticket_id):
         t = next(t for t in self._t if t.id == ticket_id).model_copy(
-            update={"body": "Cosa succede\nNella pagina di dettaglio della order, cliccando il pulsante non parte nessun download.\n\nPassi\n1. Apri una order\n2. Clicca Scarica"}
+            update={"body": "What happens\nOn the case detail page, clicking the button does not start any download.\n\nSteps\n1. Open a case\n2. Click Download"}
         )
         return t, [
-            Comment(author="autodev", is_bot=True, created_at="2026-10-21T09:00:00+00:00", text="Triage: ready (rischio Medio)\n\nIl ticket è chiaro. Causa probabile in export.py: prende il primo PDF compilabile senza ordinamento.\n\nFile coinvolti:\n- apps/backend/app/api/orders/export.py"),
-            Comment(author="Christian Gatto", created_at="2026-10-21T09:10:00+00:00", text="Solo la SCIA SUE. Entrambi obbligatori."),
+            Comment(author="autodev", is_bot=True, created_at="2026-10-21T09:00:00+00:00", text="Triage: ready (risk Medium)\n\nThe ticket is clear. Probable cause in export.py: it takes the first fillable PDF without ordering.\n\nFiles involved:\n- apps/backend/app/api/orders/export.py"),
+            Comment(author="Christian Gatto", created_at="2026-10-21T09:10:00+00:00", text="Only the SCIA SUE. Both are required."),
         ]
 
 
 def seed(db: Database) -> int:
     def run(**kw):
-        cols = dict(project="demo", status="done", started_at=NOW - 3 * 3600, finished_at=NOW - 3 * 3600 + 90, cost_usd=0.17, model="claude-haiku-5-5", outcome="analyzed", kind="triage", ticket_id="t2", ticket_title="Firma del direttore obbligatoria solo se il progettista ha il nome")
+        cols = dict(project="demo", status="done", started_at=NOW - 3 * 3600, finished_at=NOW - 3 * 3600 + 90, cost_usd=0.17, model="claude-haiku-5-5", outcome="analyzed", kind="triage", ticket_id="t2", ticket_title="Director signature required only if the designer has a name")
         cols.update(kw)
         return db.execute(f"INSERT INTO runs({','.join(cols)}) VALUES({','.join('?' * len(cols))})", tuple(cols.values()))
 
@@ -84,21 +84,21 @@ def seed(db: Database) -> int:
         db.execute("INSERT INTO events(run_id, ts, type, text) VALUES(?,?,?,?)", (rid, ts, typ, text))
 
     r1 = run()
-    for i, line in enumerate(["[0:04] haiku: avvio analisi", "[0:09] haiku:  1. legge data/knowledge_base/scia_sue_calabria_fields.json", "[0:15] haiku:  2. cerca 'required_group' in apps/backend", "[1:20] haiku: fine: ready, confidenza high, 8 turni, $0.17"]):
+    for i, line in enumerate(["[0:04] haiku: avvio analisi", "[0:09] haiku:  1. legge data/knowledge_base/scia_sue_calabria_fields.json", "[0:15] haiku:  2. cerca 'required_group' in apps/backend", "[1:20] haiku: done: ready, confidence high, 8 turni, $0.17"]):
         ev(r1, NOW - 3 * 3600 + i * 20, "log", line)
-    ev(r1, NOW - 3 * 3600 + 90, "result", "Triage: ready (rischio Medio)\n\nIl ticket è chiaro.\n\nFile coinvolti:\n- data/knowledge_base/scia_sue_calabria_fields.json")
-    run(kind="fix", status="done", cost_usd=1.62, model="claude-sonnet-5-5", outcome="review", ticket_id="t5", ticket_title="Il wizard perde i dati al ricarico dello step 4", started_at=NOW - 50 * MIN, finished_at=NOW - 30 * MIN, branch="autodev/wizard-perde-dati-a1b2c3")
-    r3 = run(kind="fix", status="failed", cost_usd=0.4, model="claude-sonnet-5-5", outcome=None, ticket_id="t7", ticket_title="Billing: il piano non si aggiorna dopo il pagamento", started_at=NOW - 20 * MIN, finished_at=NOW - 18 * MIN, error="agente di fix fallito: permesso Bash negato")
-    ev(r3, NOW - 19 * MIN, "error", "agente di fix fallito: permesso Bash negato")
+    ev(r1, NOW - 3 * 3600 + 90, "result", "Triage: ready (risk Medium)\n\nThe ticket is clear.\n\nFiles involved:\n- data/knowledge_base/scia_sue_calabria_fields.json")
+    run(kind="fix", status="done", cost_usd=1.62, model="claude-sonnet-5-5", outcome="review", ticket_id="t5", ticket_title="The wizard loses data when step 4 is reloaded", started_at=NOW - 50 * MIN, finished_at=NOW - 30 * MIN, branch="autodev/wizard-perde-dati-a1b2c3")
+    r3 = run(kind="fix", status="failed", cost_usd=0.4, model="claude-sonnet-5-5", outcome=None, ticket_id="t7", ticket_title="Billing: the plan does not update after payment", started_at=NOW - 20 * MIN, finished_at=NOW - 18 * MIN, error="fix agent failed: Bash permission denied")
+    ev(r3, NOW - 19 * MIN, "error", "fix agent failed: Bash permission denied")
     live = run(kind="fix", status="running", cost_usd=0, model="claude-sonnet-5-5", outcome=None, ticket_id="t4", ticket_title="Required and dependency fields logic", started_at=NOW - 40, finished_at=None, pid=__import__("os").getpid())
-    ev(live, NOW - 40, "started", "fix avviato")
-    ev(live, NOW - 38, "log", "[0:02] workspace: checkout di demo (ripreso, 6 righe di storia), branch autodev/bug-required-and-dependency-fields-logic-400256")
+    ev(live, NOW - 40, "started", "fix started")
+    ev(live, NOW - 38, "log", "[0:02] workspace: checkout of demo (resumed, 6 lines of history), branch autodev/bug-required-and-dependency-fields-logic-400256")
     return live
 
 
 async def feed(db: Database, run_id: int) -> None:
     """Keeps the 'running' run alive: one new action every second, then finishes."""
-    steps = ["legge apps/frontend/app/(dashboard)/new/steps/use-step-editor/derive.ts", "cerca 'applyLiveDerive' in apps/frontend", "legge apps/frontend/app/(dashboard)/new/steps/use-step-editor/use-field-changes.ts", "scrive apps/frontend/app/(dashboard)/new/steps/use-step-editor/derive.test.ts", "esegue npm --prefix apps/frontend test -- derive.test.ts", "verifica: gate di regressione e controlli...", "verifica: PASS  regression test"]
+    steps = ["reads apps/frontend/app/(dashboard)/new/steps/use-step-editor/derive.ts", "searches 'applyLiveDerive' in apps/frontend", "reads apps/frontend/app/(dashboard)/new/steps/use-step-editor/use-field-changes.ts", "writes apps/frontend/app/(dashboard)/new/steps/use-step-editor/derive.test.ts", "runs npm --prefix apps/frontend test -- derive.test.ts", "verification: regression gate and checks...", "verification: PASS  regression test"]
     for i, step in enumerate(steps):
         await asyncio.sleep(1.2)
         db.execute("INSERT INTO events(run_id, ts, type, text) VALUES(?,?,?,?)", (run_id, time.time(), "log", f"[0:{10 + i * 5:02d}] fix 1/3 sonnet-5-5: {i + 1:>2}. {step}"))
@@ -112,7 +112,7 @@ def fake_agents() -> None:
     """Triage and fix that only narrate and move the ticket, so the controls can be exercised."""
 
     async def triage(cfg, tracker, ticket, report=None):
-        for line in ["legge il codice dell'area", "forma un'ipotesi", "fine: ready, confidenza high"]:
+        for line in ["reads the area's code", "forms a hypothesis", "done: ready, confidence high"]:
             report(line)
             await asyncio.sleep(1)
         await tracker.set_status(ticket.id, Status.ANALYZED)
@@ -129,18 +129,18 @@ def fake_agents() -> None:
 
     async def fix(cfg, tracker, ticket, report=None):
         control = current_control.get()
-        for line in ["legge il file", "scrive il test"]:
+        for line in ["reads the file", "writes the test"]:
             report(line)
             await asyncio.sleep(1)
         if control:
             verdict = await control.can_use_tool("Bash", {"command": "docker compose ps"}, SimpleNamespace(title=None))
-            report("permesso " + verdict.behavior)
+            report("permission " + verdict.behavior)
             for _ in range(40):  # long enough to be paused or spoken to
                 await asyncio.sleep(0.5)
                 if control.take_interrupt():
-                    report("messaggio ricevuto: " + await control.next_instruction())
+                    report("message received: " + await control.next_instruction())
                     break
-        approved, note = await checkpoint(["before_pr"], "before_pr", "Fix verificato: apro la pull request?", {"files": ["apps/frontend/derive.ts"], "summary": "Demo", "checks": ["PASS  regression test"]})
+        approved, note = await checkpoint(["before_pr"], "before_pr", "Fix verified: open the pull request?", {"files": ["apps/frontend/derive.ts"], "summary": "Demo", "checks": ["PASS  regression test"]})
         if not approved:
             await tracker.set_status(ticket.id, Status.ESCALATED)
             return Outcome()
@@ -169,8 +169,8 @@ def main() -> None:
 
     async def list_pulls(cfg, prefix, limit=30):
         return [
-            pr(12, "autodev/wizard-perde-dati-a1b2c3", "fix: Il wizard perde i dati al ricarico dello step 4", body="## Verifiche\n- PASS  regression test\n- PASS  backend tests\n\n## Rischio: Basso"),
-            pr(9, "autodev/rubrica-duplicati-ff00aa", "fix: Rubrica: duplicati dopo l'import", state="merged"),
+            pr(12, "autodev/wizard-perde-dati-a1b2c3", "fix: The wizard loses data when step 4 is reloaded", body="## Checks\n- PASS  regression test\n- PASS  backend tests\n\n## Risk: Low"),
+            pr(9, "autodev/rubrica-duplicati-ff00aa", "fix: Address book: duplicates after import", state="merged"),
         ]
 
     async def merge_pull(cfg, number, method="squash"):

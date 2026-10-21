@@ -69,9 +69,9 @@ def mark_orphans(db: Database) -> int:
     for run_id in stale:
         db.execute(
             "UPDATE runs SET status = 'failed', finished_at = ?, error = ? WHERE id = ?",
-            (now(), "il processo è terminato senza chiudere il run", run_id),
+            (now(), "the process ended without closing the run", run_id),
         )
-        add_event(db, run_id, "error", "il processo è terminato senza chiudere il run")
+        add_event(db, run_id, "error", "the process ended without closing the run")
     db.execute("UPDATE approvals SET status = 'expired', decided_at = ? WHERE status = 'pending' AND run_id IN (SELECT id FROM runs WHERE status != 'running')", (now(),))
     return len(stale)
 
@@ -101,13 +101,13 @@ async def run_tracked(
     spent = spent_today(db, project)
     cap = daily_cap(db, daily_cap_usd, project)
     if spent >= cap:
-        raise DailyCapReached(f"tetto giornaliero raggiunto (${spent:.2f} su ${cap:.2f})")
+        raise DailyCapReached(f"daily cap reached (${spent:.2f} of ${cap:.2f})")
 
     run_id = db.execute(
         "INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, pid) VALUES(?, ?, ?, ?, 'running', ?, ?)",
         (project, ticket.id, ticket.title, kind, now(), os.getpid()),
     )
-    add_event(db, run_id, "started", f"{kind} avviato")
+    add_event(db, run_id, "started", f"{kind} started")
     if launched:
         launched(run_id)
 
@@ -130,9 +130,9 @@ async def run_tracked(
     try:
         result = await inner
     except asyncio.CancelledError:
-        _finish(db, run_id, "cancelled", error="interrotto dall'utente")
-        add_event(db, run_id, "cancelled", "interrotto dall'utente")
-        raise RunCancelled(f"run {run_id} interrotto") from None
+        _finish(db, run_id, "cancelled", error="stopped by the user")
+        add_event(db, run_id, "cancelled", "stopped by the user")
+        raise RunCancelled(f"run {run_id} stopped") from None
     except Exception as e:
         _finish(db, run_id, "failed", error=str(e))
         add_event(db, run_id, "error", str(e))

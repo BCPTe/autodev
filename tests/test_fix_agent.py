@@ -39,10 +39,10 @@ async def test_agent_fixes_the_bug_with_a_failing_test_first(tmp_path, monkeypat
     cfg = make_project(tmp_path)
     ticket = Ticket(
         id="abcdef12-1111-2222-3333-444444444444",
-        title="Il calcolo dello sconto è sbagliato",
+        title="The discount calculation is wrong",
         status=Status.IN_PROGRESS,
         kind="Bug",
-        body="apply_discount(200, 25) restituisce 175 invece di 150: lo sconto del 25% su 200 deve dare 150.",
+        body="apply_discount(200, 25) returns 175 instead of 150: a 25% discount on 200 must give 150.",
     )
     tracker = FakeTracker()
 
@@ -52,4 +52,4 @@ async def test_agent_fixes_the_bug_with_a_failing_test_first(tmp_path, monkeypat
     assert outcome.status == Status.REVIEW, tracker.comments
     assert all(c.ok for c in outcome.checks)
     assert any(c.name == "regression test" and c.ok for c in outcome.checks)
-    assert tracker.fields["verification"] == "Passata"
+    assert tracker.fields["verification"] == "Passed"

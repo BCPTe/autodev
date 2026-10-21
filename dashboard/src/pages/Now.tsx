@@ -32,7 +32,7 @@ export function Now() {
 
   return (
     <>
-      <PageHeader title="Panoramica">{overview?.repo && <span>Repo su <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · modifiche non committate"}</span>}</PageHeader>
+      <PageHeader title="Overview">{overview?.repo && <span>Repo on <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · uncommitted changes"}</span>}</PageHeader>
 
       {tickets ? <PipelineRail tickets={tickets.tickets} /> : <Skeleton className="h-48 w-full" />}
 
@@ -50,7 +50,7 @@ export function Now() {
                   <Lamp kind={RUN_LAMP[r.status]} className="mt-1.5" />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{KIND_LABEL[r.kind]} {r.status === "failed" ? "fallito" : "interrotto"}: {r.ticket_title}</p>
-                    <p className="truncate text-[13px] text-muted-foreground">{r.error ?? "Apri il run per i dettagli"}</p>
+                    <p className="truncate text-[13px] text-muted-foreground">{r.error ?? "Open the run for details"}</p>
                   </div>
                   <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{ago(r.started_at)}</span>
                 </Link>
@@ -75,7 +75,7 @@ export function Now() {
           <h2 id="in-esecuzione" className="mb-3 text-xl font-semibold">In esecuzione</h2>
           {overview && overview.running.length === 0 && (
             <div className="border-y py-3">
-              <p className="text-muted-foreground">Nessun agente al lavoro.</p>
+              <p className="text-muted-foreground">No agent working.</p>
               {last && (
                 <p className="mt-1 text-[13px]">
                   Ultimo run: <Link className="underline underline-offset-4" to={`/runs/${last.id}`}>{KIND_LABEL[last.kind]} su {last.ticket_title}</Link>

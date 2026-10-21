@@ -25,10 +25,10 @@ function DailyCap({ current }: { current: number }) {
   const n = Number(value)
   const valid = Number.isFinite(n) && n > 0 && n <= 1000
   return (
-    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { daily_budget_usd: n }), "Tetto giornaliero aggiornato") }}>
+    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { daily_budget_usd: n }), "Daily cap updated") }}>
       <span aria-hidden>$</span>
-      <Input aria-label="Tetto giornaliero in dollari" className="h-8 w-24" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || n === current}>Salva</Button>
+      <Input aria-label="Daily cap in dollars" className="h-8 w-24" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || n === current}>Save</Button>
     </form>
   )
 }
@@ -38,10 +38,10 @@ function QuietHours({ current }: { current: string | null }) {
   const [value, setValue] = useState(current ?? "")
   const valid = value === "" || /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(value)
   return (
-    <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { quiet_hours: value }), value ? "Ore di silenzio salvate" : "Ore di silenzio tolte") }}>
-      <Input aria-label="Ore di silenzio" className="h-8 w-36 font-mono" placeholder="22:00-07:00" value={value} onChange={(e) => setValue(e.target.value)} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || value === (current ?? "")}>Salva</Button>
-      <span className="text-xs text-muted-foreground">Vuoto = sempre attivo. In queste ore niente parte da solo.</span>
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { quiet_hours: value }), value ? "Quiet hours saved" : "Quiet hours removed") }}>
+      <Input aria-label="Quiet hours" className="h-8 w-36 font-mono" placeholder="22:00-07:00" value={value} onChange={(e) => setValue(e.target.value)} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || value === (current ?? "")}>Save</Button>
+      <span className="text-xs text-muted-foreground">Empty = always on. In these hours nothing starts by itself.</span>
     </form>
   )
 }
@@ -52,8 +52,8 @@ function Notifications({ server, canNotify }: { server: boolean; canNotify: bool
   return (
     <div className="space-y-2">
       <label className="flex items-center gap-2">
-        <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={server} disabled={pending || !canNotify} onChange={(e) => act(() => put("/api/control", { notifications: e.target.checked }), e.target.checked ? "Notifiche del desktop attive" : "Notifiche del desktop spente")} />
-        Notifiche del desktop {!canNotify && <span className="text-xs text-muted-foreground">(serve <code>notify-send</code> o <code>autonomy.notify_command</code>)</span>}
+        <input type="checkbox" className="size-4 accent-[var(--primary)]" checked={server} disabled={pending || !canNotify} onChange={(e) => act(() => put("/api/control", { notifications: e.target.checked }), e.target.checked ? "Desktop notifications on" : "Desktop notifications off")} />
+        Desktop notifications {!canNotify && <span className="text-xs text-muted-foreground">(needs <code>notify-send</code> or <code>autonomy.notify_command</code>)</span>}
       </label>
       <label className="flex items-center gap-2">
         <input
@@ -62,7 +62,7 @@ function Notifications({ server, canNotify }: { server: boolean; canNotify: bool
           checked={browser}
           onChange={async (e) => setBrowser(await setBrowserNotifications(e.target.checked))}
         />
-        Notifiche del browser <span className="text-xs text-muted-foreground">(solo a scheda aperta in secondo piano)</span>
+        Browser notifications <span className="text-xs text-muted-foreground">(only while the tab is open in the background)</span>
       </label>
     </div>
   )
@@ -76,48 +76,48 @@ export function Settings() {
 
   return (
     <>
-      <PageHeader title="Impostazioni">Autonomia e tetto giornaliero si cambiano qui; il resto in <span className="font-mono">projects/{c.project}.yaml</span></PageHeader>
+      <PageHeader title="Impostazioni">Autonomy, quiet hours and the daily cap are changed here; everything else in <span className="font-mono">projects/{c.project}.yaml</span></PageHeader>
 
       <section className="max-w-3xl">
-        <h2 className="mb-1 text-xl font-semibold">Autonomia</h2>
+        <h2 className="mb-1 text-xl font-semibold">Autonomy</h2>
         <dl>
-          <Row label="Modalità">{MODES.find((m) => m.id === control?.mode)?.label}: <span className="text-muted-foreground">{MODES.find((m) => m.id === control?.mode)?.hint}</span></Row>
-          <Row label="Approvazione automatica">Solo rischio {c.autonomy.auto_approve_risks.join(" e ")} (in modalità Auto)</Row>
-          <Row label="Frequenza di controllo">Ogni {c.autonomy.poll_seconds} secondi (in Auto e Supervisionato)</Row>
-          <Row label="Nuovo tentativo dopo un errore">Dopo {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minuti, oppure a mano</Row>
-          <Row label="Soste per la tua approvazione">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "dopo l'agente, prima delle verifiche" : "prima della pull request")).join("; ") + " (non in modalità Auto)" : "Nessuno"}</Row>
-          <Row label="Ore di silenzio">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
-          <Row label="Notifiche">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
-          <Row label="Tetto giornaliero"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
+          <Row label="Mode">{MODES.find((m) => m.id === control?.mode)?.label}: <span className="text-muted-foreground">{MODES.find((m) => m.id === control?.mode)?.hint}</span></Row>
+          <Row label="Automatic approval">Only {c.autonomy.auto_approve_risks.join(" and ")} risk (in Auto mode)</Row>
+          <Row label="Check frequency">Every {c.autonomy.poll_seconds} seconds (in Auto and Supervised)</Row>
+          <Row label="Retry after an error">After {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minutes, or by hand</Row>
+          <Row label="Pauses for your approval">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "after the agent, before verification" : "before the pull request")).join("; ") + " (not in Auto mode)" : "None"}</Row>
+          <Row label="Quiet hours">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
+          <Row label="Notifications">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
+          <Row label="Daily cap"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
         </dl>
 
-        <h2 className="mb-1 mt-10 text-xl font-semibold">Progetto</h2>
+        <h2 className="mb-1 mt-10 text-xl font-semibold">Project</h2>
         <dl>
           <Row label="Repository">{c.repo}</Row>
-          <Row label="Branch di base">{c.base_branch}</Row>
+          <Row label="Base branch">{c.base_branch}</Row>
           <Row label="Cartella locale"><span className="font-mono text-[13px]">{c.local_path}</span></Row>
-          <Row label="Dove lavora l'agente">{c.workspace_mode === "inplace" ? "Nel checkout del progetto, su un branch dedicato" : "In un clone separato"}</Row>
-          <Row label="Pull request automatiche">{c.pr_enabled ? "Attive" : "Disattivate"}</Row>
+          <Row label="Where the agent works">{c.workspace_mode === "inplace" ? "In the project's checkout, on a dedicated branch" : "In a separate clone"}</Row>
+          <Row label="Automatic pull requests">{c.pr_enabled ? "On" : "Off"}</Row>
         </dl>
 
-        <h2 className="mb-1 mt-10 text-xl font-semibold">Limiti</h2>
+        <h2 className="mb-1 mt-10 text-xl font-semibold">Limits</h2>
         <dl>
-          <Row label="Tetto per ticket">{money(c.limits.budget_usd_per_ticket)}</Row>
-          <Row label="Tentativi per ogni avvio">{c.limits.max_attempts}</Row>
-          <Row label="Avvii del fix per ticket">{c.limits.max_fix_runs}</Row>
-          <Row label="File modificabili per fix">{c.limits.max_files}</Row>
+          <Row label="Cap per ticket">{money(c.limits.budget_usd_per_ticket)}</Row>
+          <Row label="Attempts per start">{c.limits.max_attempts}</Row>
+          <Row label="Fix starts per ticket">{c.limits.max_fix_runs}</Row>
+          <Row label="Files a fix may change">{c.limits.max_files}</Row>
         </dl>
 
-        <h2 className="mb-1 mt-10 text-xl font-semibold">Agenti</h2>
+        <h2 className="mb-1 mt-10 text-xl font-semibold">Agents</h2>
         <dl>
           {Object.entries(c.agents).map(([name, a]) => (
-            <Row key={name} label={name === "triage" ? "Triage" : "Fix"}>{a.models.map(shortModel).join(" → ")} · fino a {a.max_turns} turni</Row>
+            <Row key={name} label={name === "triage" ? "Triage" : "Fix"}>{a.models.map(shortModel).join(" → ")} · up to {a.max_turns} turns</Row>
           ))}
-          <Row label="Modelli selezionabili nel ticket">{Object.entries(c.model_choices).map(([k, v]) => `${k} (${v})`).join(", ")}</Row>
+          <Row label="Models selectable in the ticket">{Object.entries(c.model_choices).map(([k, v]) => `${k} (${v})`).join(", ")}</Row>
         </dl>
 
-        <h2 className="mb-1 mt-10 text-xl font-semibold">File ad alto rischio</h2>
-        <p className="mb-2 text-muted-foreground">Le modifiche a questi file portano il rischio al livello Alto.</p>
+        <h2 className="mb-1 mt-10 text-xl font-semibold">High-risk files</h2>
+        <p className="mb-2 text-muted-foreground">Changes to these files raise the risk to High.</p>
         <ul className="font-mono text-[13px]">{c.never_automerge.map((p) => <li key={p}>{p}</li>)}</ul>
       </section>
     </>

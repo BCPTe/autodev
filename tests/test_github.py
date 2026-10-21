@@ -13,11 +13,11 @@ REPO = f"https://api.github.com/repos/{CFG.pr.slug}"
 
 async def test_missing_token_is_reported(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    assert "GITHUB_TOKEN mancante" in await verify_access(CFG)
+    assert "GITHUB_TOKEN missing" in await verify_access(CFG)
 
 
 @respx.mock
-@pytest.mark.parametrize("status,expected", [(401, "non valido"), (404, "non visibile")])
+@pytest.mark.parametrize("status,expected", [(401, "invalid"), (404, "not visible")])
 async def test_repo_errors_are_explained(monkeypatch, status, expected):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     respx.get(REPO).mock(return_value=httpx.Response(status))
@@ -29,7 +29,7 @@ async def test_token_without_pull_request_permission_is_explained(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     respx.get(REPO).mock(return_value=httpx.Response(200, json={}))
     respx.get(f"{REPO}/pulls").mock(return_value=httpx.Response(403))
-    assert "permesso 'Pull requests'" in await verify_access(CFG)
+    assert "'Pull requests' permission" in await verify_access(CFG)
 
 
 @respx.mock

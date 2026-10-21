@@ -43,12 +43,12 @@ async def check(project: str) -> int:
 async def explain_idle(tracker: NotionTracker, wanted: Status, wanted_label: str) -> None:
     """Say why nothing ran: list tickets sitting in other states and what to do with them."""
     labels = tracker._cfg.status_map
-    print(f"Nessun ticket in '{labels[wanted]}' con 'Authorized' spuntato: niente da fare.")
+    print(f"No ticket in '{labels[wanted]}' with 'Authorized' ticked: nothing to do.")
     hints = {
-        Status.NEW: "non autorizzato: spunta 'Authorized'",
-        Status.NEEDS_INFO: "rispondi con un commento e riportalo in 'Nuovo'",
-        Status.ANALYZED: "se l'analisi ti convince, spostalo in 'In lavorazione'",
-        Status.ESCALATED: "guarda 'Agent notes' per il motivo",
+        Status.NEW: "not authorised: tick 'Authorized'",
+        Status.NEEDS_INFO: "answer with a comment and move it back to 'New'",
+        Status.ANALYZED: "if the analysis convinces you, move it to 'In progress'",
+        Status.ESCALATED: "see 'Agent notes' for the reason",
     }
     for status, hint in hints.items():
         if status == wanted and status != Status.NEW:
@@ -78,14 +78,14 @@ async def triage(project: str) -> int:
                     echo=lambda line: print(f"  {line}", flush=True),
                 )
             except (DailyCapReached, RunCancelled) as e:
-                print(f"  fermato: {e}")
+                print(f"  stopped: {e}")
                 break
             except Exception as e:
                 print(f"  failed: {e}")
                 continue
             detail = ", ".join(f"{r.model} {r.turns} turns ${r.cost_usd:.2f}" for r in runs) or "no agent run"
             print(f"\n{'-' * 60}\n{comment}\n{'-' * 60}")
-            print(f"-> stato: {status.value} ({detail})")
+            print(f"-> status: {status.value} ({detail})")
     finally:
         await tracker.aclose()
     return 0
@@ -110,7 +110,7 @@ async def fix(project: str) -> int:
                     echo=lambda line: print(f"  {line}", flush=True),
                 )
             except (DailyCapReached, RunCancelled) as e:
-                print(f"  fermato: {e}")
+                print(f"  stopped: {e}")
                 break
             except Exception as e:
                 print(f"  failed: {e}")
@@ -137,16 +137,16 @@ async def cleanup(project: str, remote: bool, dry_run: bool, workspaces: bool) -
     try:
         pr_merged = {p["branch"] for p in await github.list_pulls(cfg, cfg.branch_prefix) if p["state"] == "merged"}
     except Exception as e:
-        print(f"Pull request non lette ({e}): uso solo lo stato di git (i merge 'squash' non risultano)")
+        print(f"Pull requests not read ({e}): using git state only (squash merges will not show)")
     names = repo.removable_branches(cfg, pr_merged)
-    print("\n".join(f"{'[dry-run] ' if dry_run else ''}elimina {n}" for n in names) or "Nessun branch da eliminare.")
+    print("\n".join(f"{'[dry-run] ' if dry_run else ''}delete {n}" for n in names) or "No branches to delete.")
     if not dry_run:
         for n in repo.delete_branches(cfg, names, pr_merged):
             if remote and await github.delete_remote_branch(cfg, n):
                 print(f"  rimosso anche su GitHub: {n}")
     if workspaces and WORKSPACES.is_dir():
         for d in sorted(p for p in WORKSPACES.iterdir() if p.is_dir()):
-            print(f"{'[dry-run] ' if dry_run else ''}rimuove il clone {d.name}")
+            print(f"{'[dry-run] ' if dry_run else ''}removing clone {d.name}")
             if not dry_run:
                 shutil.rmtree(d)
     return 0
@@ -165,7 +165,7 @@ def serve(projects: list[str], port: int) -> int:
         return 1
     names = projects or sorted(p.stem for p in Path("projects").glob("*.yaml"))
     if not names:
-        print("nessun progetto in projects/")
+        print("no project in projects/")
         return 1
     db = Database()
 
@@ -179,7 +179,7 @@ def serve(projects: list[str], port: int) -> int:
     code = app.state.auth.setup_code
     print(f"\nautodev dashboard: http://localhost:{port}")
     if code:
-        print(f"Prima configurazione: nella pagina inserisci il codice  {code}  e scegli una password.\n")
+        print(f"First setup: on the page enter the code  {code}  and choose a password.\n")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
 

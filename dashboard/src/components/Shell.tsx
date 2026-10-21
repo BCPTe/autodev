@@ -13,13 +13,13 @@ import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 const NAV = [
-  { to: "/", label: "Panoramica", icon: LayoutDashboard, end: true },
+  { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/tickets", label: "Ticket", icon: Ticket },
-  { to: "/runs", label: "Attività", icon: Activity },
+  { to: "/runs", label: "Activity", icon: Activity },
   { to: "/repo", label: "Repo", icon: GitBranch },
   { to: "/prs", label: "Pull request", icon: GitPullRequest },
-  { to: "/costs", label: "Costi", icon: CircleDollarSign },
-  { to: "/settings", label: "Impostazioni", icon: Settings },
+  { to: "/costs", label: "Costs", icon: CircleDollarSign },
+  { to: "/settings", label: "Settings", icon: Settings },
 ]
 
 function Budget() {
@@ -28,12 +28,12 @@ function Budget() {
   const pct = Math.min(100, (data.spent_today / data.daily_cap) * 100)
   const hot = pct >= 80
   return (
-    <div className="flex items-center gap-3" title="Spesa di oggi rispetto al tetto giornaliero">
-      <span className="hidden text-xs text-muted-foreground sm:inline">Oggi</span>
+    <div className="flex items-center gap-3" title="Today's spend against the daily cap">
+      <span className="hidden text-xs text-muted-foreground sm:inline">Today</span>
       <span className="font-display text-base tabular-nums">
         {money(data.spent_today)} <span className="text-muted-foreground">/ {money(data.daily_cap)}</span>
       </span>
-      <div role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Budget giornaliero" className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+      <div role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Daily budget" className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
         <div className={cn("h-full", hot ? "bg-lamp-red" : "bg-primary")} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -48,11 +48,11 @@ function Agents() {
     <span className="flex items-center gap-3 text-sm">
       <span className="flex items-center gap-2">
         <Lamp kind={n ? "violet" : "idle"} live={n > 0} />
-        {n ? `${n} ${n === 1 ? "agente al lavoro" : "agenti al lavoro"}` : "Nessun agente al lavoro"}
+        {n ? `${n} ${n === 1 ? "agent working" : "agents working"}` : "No agent working"}
       </span>
       {asks > 0 && (
         <Link to="/" className="rounded-sm bg-lamp-amber/25 px-2 py-0.5 text-[13px] font-medium">
-          {asks} {asks === 1 ? "richiesta in attesa" : "richieste in attesa"}
+          {asks} {asks === 1 ? "request waiting" : "requests waiting"}
         </Link>
       )}
     </span>
@@ -65,7 +65,7 @@ function ProjectSwitch() {
   const current = getProject()
   return (
     <label className="mx-4 mb-2 block text-xs text-muted-foreground">
-      Progetto
+      Project
       <select
         className="mt-1 block h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground"
         value={current ?? data.default}
@@ -73,7 +73,7 @@ function ProjectSwitch() {
       >
         {data.projects.map((p) => (
           <option key={p.name} value={p.name}>
-            {p.name}{p.waiting ? ` · ${p.waiting} in attesa` : p.running ? " · al lavoro" : ""}
+            {p.name}{p.waiting ? ` · ${p.waiting} waiting` : p.running ? " · working" : ""}
           </option>
         ))}
       </select>
@@ -99,7 +99,7 @@ export function Shell() {
           <span className="font-display text-xl font-semibold">autodev</span>
         </div>
         <ProjectSwitch />
-        <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible" aria-label="Sezioni">
+        <nav className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:overflow-visible" aria-label="Sections">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -127,10 +127,10 @@ export function Shell() {
             <StopAll />
             <MyTurn />
             <div className="mx-1"><ModeSwitch /></div>
-            <Button variant="ghost" size="icon" aria-label={dark ? "Passa al tema chiaro" : "Passa al tema scuro"} onClick={() => setTheme(dark ? "light" : "dark")}>
+            <Button variant="ghost" size="icon" aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} onClick={() => setTheme(dark ? "light" : "dark")}>
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Esci" onClick={logout}>
+            <Button variant="ghost" size="icon" aria-label="Sign out" onClick={logout}>
               <LogOut className="size-4" />
             </Button>
           </div>

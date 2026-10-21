@@ -34,7 +34,7 @@ export function RunFeed({ runId, className }: { runId: number; className?: strin
         aria-live="off"
         className="min-h-24 flex-1 overflow-y-auto rounded-sm bg-muted/60 p-3 font-mono text-[12.5px] leading-relaxed"
       >
-        {lines.length === 0 && <p className="text-muted-foreground">In attesa dei primi eventi…</p>}
+        {lines.length === 0 && <p className="text-muted-foreground">Waiting for the first events…</p>}
         {lines.map((e) => (
           <div
             key={e.id}
@@ -49,9 +49,9 @@ export function RunFeed({ runId, className }: { runId: number; className?: strin
           >
             <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">{offset(e.ts, t0)}</span>
             <span className="min-w-0 whitespace-pre-wrap break-words">
-              {e.type === "user" && <strong className="mr-1 not-italic">Tu:</strong>}
-              {e.type === "permission" && "Chiede il permesso: "}
-              {e.type === "checkpoint" && "Aspetta la tua approvazione: "}
+              {e.type === "user" && <strong className="mr-1 not-italic">You:</strong>}
+              {e.type === "permission" && "Asks for permission: "}
+              {e.type === "checkpoint" && "Waiting for your approval: "}
               {e.text.replace(/^\[\d+:\d+\]\s*/, "")}
             </span>
           </div>
@@ -60,7 +60,7 @@ export function RunFeed({ runId, className }: { runId: number; className?: strin
       </div>
       {result && (
         <div className="mt-3">
-          <h4 className="mb-1 font-display text-sm font-semibold">Esito</h4>
+          <h4 className="mb-1 font-display text-sm font-semibold">Outcome</h4>
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-sm border bg-card p-3 font-sans text-[13px] leading-relaxed">{result.text}</pre>
         </div>
       )}

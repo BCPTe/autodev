@@ -31,7 +31,7 @@ export function DiffView({ branch }: { branch: string | null }) {
   const [open, setOpen] = useState<Set<string>>(new Set())
   if (isLoading) return <Skeleton className="h-24 w-full" />
   if (error) return <p className="text-destructive">{(error as Error).message}</p>
-  if (!data || data.files.length === 0) return <p className="text-muted-foreground">Nessuna differenza.</p>
+  if (!data || data.files.length === 0) return <p className="text-muted-foreground">No differences.</p>
   const toggle = (p: string) => setOpen((s) => { const n = new Set(s); n.has(p) ? n.delete(p) : n.add(p); return n })
   const add = data.files.reduce((n, f) => n + (f.additions ?? 0), 0)
   const del = data.files.reduce((n, f) => n + (f.deletions ?? 0), 0)
@@ -48,10 +48,10 @@ export function DiffView({ branch }: { branch: string | null }) {
               <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open.has(f.path) && "rotate-90")} aria-hidden />
               <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{f.path}</span>
               <span className="whitespace-nowrap text-xs tabular-nums">
-                {f.additions == null ? "binario" : <><span className="text-lamp-green">+{f.additions}</span> <span className="text-lamp-red">−{f.deletions}</span></>}
+                {f.additions == null ? "binary" : <><span className="text-lamp-green">+{f.additions}</span> <span className="text-lamp-red">−{f.deletions}</span></>}
               </span>
             </button>
-            {open.has(f.path) && (f.truncated ? <p className="px-3 py-2 text-[13px] text-muted-foreground">Diff troppo grande per essere mostrato qui: aprilo con git.</p> : f.patch ? <Patch text={f.patch} /> : <p className="px-3 py-2 text-[13px] text-muted-foreground">Nessun contenuto da mostrare.</p>)}
+            {open.has(f.path) && (f.truncated ? <p className="px-3 py-2 text-[13px] text-muted-foreground">Diff too large to show here: open it with git.</p> : f.patch ? <Patch text={f.patch} /> : <p className="px-3 py-2 text-[13px] text-muted-foreground">Nothing to show.</p>)}
           </li>
         ))}
       </ul>

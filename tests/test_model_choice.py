@@ -37,9 +37,9 @@ def test_progress_describes_tool_calls_compactly():
     from autodev.progress import describe_tool
 
     cwd = "/work/repo"
-    assert describe_tool("Read", {"file_path": "/work/repo/app/x.py"}, cwd) == "legge app/x.py"
-    assert describe_tool("Grep", {"pattern": "required", "path": "/work/repo/app"}, cwd) == "cerca 'required' in app"
-    assert describe_tool("Bash", {"command": "pytest   -q\n tests/"}, cwd) == "esegue pytest -q tests/"
+    assert describe_tool("Read", {"file_path": "/work/repo/app/x.py"}, cwd) == "reads app/x.py"
+    assert describe_tool("Grep", {"pattern": "required", "path": "/work/repo/app"}, cwd) == "searches 'required' in app"
+    assert describe_tool("Bash", {"command": "pytest   -q\n tests/"}, cwd) == "runs pytest -q tests/"
     assert describe_tool("Weird", {}, cwd) == "Weird"
 
 
@@ -48,7 +48,7 @@ async def test_triage_runs_do_not_consume_fix_attempts(monkeypatch):
     from autodev.agents.triage import RunInfo, TriageResult
 
     async def fake_run_triage(cfg, ticket, report=None, budget_usd=None):
-        return TriageResult(verdict="ready", confidence="high", risk="Basso", analysis="a"), [RunInfo("m", 0.2, 3)]
+        return TriageResult(verdict="ready", confidence="high", risk="Low", analysis="a"), [RunInfo("m", 0.2, 3)]
 
     monkeypatch.setattr(pipeline, "run_triage", fake_run_triage)
 
@@ -74,7 +74,7 @@ def test_budget_is_cumulative_over_everything_booked_on_the_ticket():
     t = Ticket(id="t", title="x", status=Status.IN_PROGRESS, cost_usd=2.5)
     assert remaining_budget(CFG, t) == pytest.approx(3.5)
     assert remaining_budget(CFG, t, spent_now=1.0) == pytest.approx(2.5)
-    assert "$3.50 su $6.00" in budget_message(CFG, t, spent_now=1.0)
+    assert "$3.50 of $6.00" in budget_message(CFG, t, spent_now=1.0)
 
 
 async def test_exhausted_budget_stops_before_any_agent_runs(monkeypatch):
@@ -98,5 +98,5 @@ async def test_exhausted_budget_stops_before_any_agent_runs(monkeypatch):
     t = T()
     ticket = Ticket(id="t", title="x", status=Status.NEW, body="x" * 100, cost_usd=5.9)
     status, runs, comment = await pipeline.triage_ticket(CFG, t, ticket)
-    assert status == Status.ESCALATED and runs == [] and "tetto di spesa" in comment
+    assert status == Status.ESCALATED and runs == [] and "spending cap" in comment
     assert t.status == Status.ESCALATED

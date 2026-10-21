@@ -31,11 +31,11 @@ export function Tickets() {
 
   return (
     <>
-      <PageHeader title="Ticket">{data && `${data.tickets.length} in totale`}</PageHeader>
+      <PageHeader title="Ticket">{data && `${data.tickets.length} in total`}</PageHeader>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca per titolo" aria-label="Cerca per titolo" className="w-64" />
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtra per stato">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title" aria-label="Cerca per titolo" className="w-64" />
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
           {ALL.filter((s) => counts[s]).map((s) => (
             <button
               key={s}
@@ -50,20 +50,20 @@ export function Tickets() {
       </div>
 
       {isLoading && <Skeleton className="h-64 w-full" />}
-      {data && rows.length === 0 && <p className="py-6 text-muted-foreground">Nessun ticket corrisponde ai filtri.</p>}
+      {data && rows.length === 0 && <p className="py-6 text-muted-foreground">No ticket matches the filters.</p>}
       {rows.length > 0 && (
         <div className="overflow-x-auto rounded-sm border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Stato</TableHead>
-                <TableHead>Titolo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Title</TableHead>
                 <TableHead>Area</TableHead>
-                <TableHead>Rischio</TableHead>
-                <TableHead>Modello</TableHead>
-                <TableHead className="text-right">Tentativi</TableHead>
-                <TableHead className="text-right">Costo</TableHead>
-                <TableHead>Aggiornato</TableHead>
+                <TableHead>Risk</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Attempts</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead>Updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
