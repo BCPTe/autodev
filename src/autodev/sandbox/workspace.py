@@ -73,7 +73,7 @@ class Workspace:
         tree is refused instead of being swept into the agent's commits.
         """
         path = Path(cfg.local_path)
-        branch = f"autodev/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
+        branch = f"{cfg.branch_prefix}/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
         dirty = git(path, "status", "--porcelain").splitlines()
         if dirty:
             shown = "\n".join(f"  {line}" for line in dirty[:12]) + (f"\n  ... e altri {len(dirty) - 12}" if len(dirty) > 12 else "")
@@ -113,7 +113,7 @@ class Workspace:
         """
         WORKSPACES.mkdir(exist_ok=True)
         path = WORKSPACES / f"{slugify(cfg.local_path.rsplit('/', 1)[-1])}-{ticket.id.replace('-', '')[:8]}"
-        branch = f"autodev/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
+        branch = f"{cfg.branch_prefix}/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
         if path.exists():
             return cls._resume(cfg, path, branch)
         git(WORKSPACES, "clone", "--quiet", "--local", cfg.local_path, str(path))

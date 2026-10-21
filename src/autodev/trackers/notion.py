@@ -43,30 +43,31 @@ class NotionTracker:
 
     def _parse(self, page: dict) -> Ticket:
         p = page["properties"]
-        status_name = p["Stato"]["status"]["name"]
+        c = self._cfg
+        status_name = p[c.prop("status")]["status"]["name"]
         return Ticket(
             id=page["id"],
-            title=_text(p["Titolo"], "title") or "",
+            title=_text(p[c.prop("title")], "title") or "",
             status=self._to_status[status_name],
-            kind=_select(p["Tipo"]),
-            area=_select(p["Area"]),
-            priority=_select(p["Priorità"]),
-            environment=_select(p["Ambiente"]),
-            page_url=p["URL pagina"]["url"],
-            reported_by=_text(p["Segnalato da"], "rich_text"),
-            authorized=p["Autorizzato"]["checkbox"],
-            attempts=int(p["Tentativi"]["number"] or 0),
-            cost_usd=float(p["Costo (USD)"]["number"] or 0.0),
-            model=_select(p.get("Modello") or {}),
+            kind=_select(p[c.prop("kind")]),
+            area=_select(p[c.prop("area")]),
+            priority=_select(p[c.prop("priority")]),
+            environment=_select(p[c.prop("environment")]),
+            page_url=p[c.prop("page_url")]["url"],
+            reported_by=_text(p[c.prop("reported_by")], "rich_text"),
+            authorized=p[c.prop("authorized")]["checkbox"],
+            attempts=int(p[c.prop("attempts")]["number"] or 0),
+            cost_usd=float(p[c.prop("cost")]["number"] or 0.0),
+            model=_select(p.get(c.prop("model")) or {}),
             url=page.get("url"),
-            risk=_select(p.get("Rischio") or {}),
-            branch=_text(p.get("Branch") or {}, "rich_text"),
-            pr_url=(p.get("PR") or {}).get("url"),
-            agent_note=_text(p.get("Note agente") or {}, "rich_text"),
-            verification=_select(p.get("Esito verifica") or {}),
+            risk=_select(p.get(c.prop("risk")) or {}),
+            branch=_text(p.get(c.prop("branch")) or {}, "rich_text"),
+            pr_url=(p.get(c.prop("pr")) or {}).get("url"),
+            agent_note=_text(p.get(c.prop("agent_note")) or {}, "rich_text"),
+            verification=_select(p.get(c.prop("verification")) or {}),
             created_at=page.get("created_time"),
             updated_at=page.get("last_edited_time"),
-            attachments=[f["name"] for f in p["Allegati"]["files"]],
+            attachments=[f["name"] for f in p[c.prop("attachments")]["files"]],
         )
 
     async def _body(self, page_id: str) -> str:
@@ -79,9 +80,10 @@ class NotionTracker:
         return "\n".join(lines).strip()
 
     async def fetch_by_status(self, status: Status, *, authorized_only: bool = True) -> list[Ticket]:
-        conditions: list[dict] = [{"property": "Stato", "status": {"equals": self._cfg.status_map[status]}}]
+        c = self._cfg
+        conditions: list[dict] = [{"property": c.prop("status"), "status": {"equals": self._cfg.status_map[status]}}]
         if authorized_only:
-            conditions.append({"property": "Autorizzato", "checkbox": {"equals": True}})
+            conditions.append({"property": c.prop("authorized"), "checkbox": {"equals": True}})
         r = await self._client.post(
             f"/data_sources/{self._cfg.data_source_id}/query", json={"filter": {"and": conditions}}
         )
@@ -151,7 +153,8 @@ class NotionTracker:
         r.raise_for_status()
 
     async def set_status(self, ticket_id: str, status: Status) -> None:
-        await self._patch(ticket_id, {"Stato": {"status": {"name": self._cfg.status_map[status]}}})
+        c = self._cfg
+        await self._patch(ticket_id, {c.prop("status"): {"status": {"name": self._cfg.status_map[status]}}})
 
     async def comment(self, ticket_id: str, text: str) -> None:
         r = await self._client.post(
@@ -173,20 +176,21 @@ class NotionTracker:
         verification: str | None = None,
     ) -> None:
         props: dict = {}
+        c = self._cfg
         if risk is not None:
-            props["Rischio"] = {"select": {"name": risk.value}}
+            props[c.prop("risk")] = {"select": {"name": risk.value}}
         if pr_url is not None:
-            props["PR"] = {"url": pr_url}
+            props[c.prop("pr")] = {"url": pr_url}
         if branch is not None:
-            props["Branch"] = _rich(branch)
+            props[c.prop("branch")] = _rich(branch)
         if attempts is not None:
-            props["Tentativi"] = {"number": attempts}
+            props[c.prop("attempts")] = {"number": attempts}
         if cost_usd is not None:
-            props["Costo (USD)"] = {"number": cost_usd}
+            props[c.prop("cost")] = {"number": cost_usd}
         if agent_note is not None:
-            props["Note agente"] = _rich(agent_note)
+            props[c.prop("agent_note")] = _rich(agent_note)
         if verification is not None:
-            props["Esito verifica"] = {"select": {"name": verification}}
+            props[c.prop("verification")] = {"select": {"name": verification}}
         if props:
             await self._patch(ticket_id, props)
 

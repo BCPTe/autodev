@@ -1,0 +1,123 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/barlow-semi-condensed/500.css";
+@import "@fontsource/barlow-semi-condensed/600.css";
+@import "@fontsource/jetbrains-mono/400.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #eef1f4;
+  --foreground: #1b2430;
+  --card: #f8fafb;
+  --card-foreground: #1b2430;
+  --popover: #ffffff;
+  --popover-foreground: #1b2430;
+  --primary: #2446d6;
+  --primary-foreground: #ffffff;
+  --secondary: #e1e6ec;
+  --secondary-foreground: #1b2430;
+  --muted: #e4e9ee;
+  --muted-foreground: #586475;
+  --accent: #dfe6f7;
+  --accent-foreground: #17308f;
+  --destructive: #c93a3a;
+  --border: #d2d9e1;
+  --input: #c7d0da;
+  --ring: #2446d6;
+  --radius: 0.375rem;
+
+  --lamp-idle: #8793a3;
+  --lamp-amber: #d99a00;
+  --lamp-green: #1f9d6b;
+  --lamp-red: #d64545;
+  --lamp-violet: #7a5af8;
+  --lamp-blue: #2446d6;
+  --rail: #b9c3cf;
+}
+
+.dark {
+  --background: #11161c;
+  --foreground: #e6ebf1;
+  --card: #171d25;
+  --card-foreground: #e6ebf1;
+  --popover: #1b222b;
+  --popover-foreground: #e6ebf1;
+  --primary: #7b95ff;
+  --primary-foreground: #0c1226;
+  --secondary: #202833;
+  --secondary-foreground: #e6ebf1;
+  --muted: #1c232d;
+  --muted-foreground: #98a5b6;
+  --accent: #1e2a4d;
+  --accent-foreground: #c9d5ff;
+  --destructive: #f06a6a;
+  --border: #262f3b;
+  --input: #303a48;
+  --ring: #7b95ff;
+
+  --lamp-idle: #6f7c8d;
+  --lamp-amber: #f0b429;
+  --lamp-green: #3ec28f;
+  --lamp-red: #f06a6a;
+  --lamp-violet: #a592ff;
+  --lamp-blue: #7b95ff;
+  --rail: #3a4656;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-rail: var(--rail);
+  --color-lamp-idle: var(--lamp-idle);
+  --color-lamp-amber: var(--lamp-amber);
+  --color-lamp-green: var(--lamp-green);
+  --color-lamp-red: var(--lamp-red);
+  --color-lamp-violet: var(--lamp-violet);
+  --color-lamp-blue: var(--lamp-blue);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "IBM Plex Sans", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.005em; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+@keyframes lamp-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lamp-violet) 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--lamp-violet) 0%, transparent); }
+}
+.lamp-live { animation: lamp-pulse 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .lamp-live { animation: none; } }

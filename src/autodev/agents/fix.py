@@ -31,7 +31,7 @@ really is. If a command is refused, use exactly the forms listed under "Commands
 commands with `cd` or `&&`.
 
 If the problem cannot be reproduced or fixed with confidence, change nothing and report `cannot_fix` with the \
-reason: a wrong fix is worse than none. Write `summary` and `notes` in Italian, concise."""
+reason: a wrong fix is worse than none. Write `summary` and `notes` in {language}, concise."""
 
 
 class FixResult(BaseModel):
@@ -81,14 +81,16 @@ Your previous attempt failed verification. Fix the problems below in the existin
     return text
 
 
-def system_prompt(ws: Workspace, commands: str = "") -> str:
+def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", instructions: str = "") -> str:
     """Base instructions plus the repo's own CLAUDE.md, injected explicitly.
 
     Project settings are not loaded from the clone: a fresh clone is untrusted, and settings
     files can carry hooks and permissions that an automated run must not inherit.
     """
     rules = ws.path / "CLAUDE.md"
-    text = SYSTEM_PROMPT
+    text = SYSTEM_PROMPT.replace("{language}", language)
+    if instructions:
+        text += f"\n\n# Project instructions\n{instructions.strip()}"
     if commands:
         text += f"\n\n# Commands you may run (exactly these forms)\n{commands.strip()}"
     if rules.exists():
@@ -125,7 +127,7 @@ async def run_fix(
     bash = [f"Bash({expand(p, cfg)}:*)" for p in agent.allowed_bash]
     options = ClaudeAgentOptions(
         model=model or agent.models[0],
-        system_prompt=system_prompt(ws, expand(agent.commands, cfg)),
+        system_prompt=system_prompt(ws, expand(agent.commands, cfg), cfg.language, agent.instructions),
         cwd=str(ws.path),
         tools=["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
         allowed_tools=["Read", "Grep", "Glob", "Edit", "Write", *bash],

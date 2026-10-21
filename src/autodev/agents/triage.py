@@ -34,7 +34,7 @@ find the relevant code or the situation is ambiguous.
 Risk: high for auth, billing, database migrations, data loss or security; medium for logic changes spanning \
 several modules; low for local, well-covered or purely visual changes.
 
-Write `analysis` and `questions` in Italian, concise and concrete. `suspected_files` are paths relative to the \
+Write `analysis` and `questions` in {language}, concise and concrete. `suspected_files` are paths relative to the \
 repository root.
 
 # Code map
@@ -87,7 +87,7 @@ async def _run(
     agent = cfg.agents["triage"]
     options = ClaudeAgentOptions(
         model=model,
-        system_prompt=SYSTEM_PROMPT.format(area_map=cfg.area_map_text or "(none)"),
+        system_prompt=(SYSTEM_PROMPT.format(area_map=cfg.area_map_text or "(none)", language=cfg.language) + (f"\n\n# Project instructions\n{agent.instructions.strip()}" if agent.instructions else "")),
         cwd=cfg.local_path,
         tools=["Read", "Grep", "Glob"],
         allowed_tools=["Read", "Grep", "Glob"],

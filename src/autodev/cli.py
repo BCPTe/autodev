@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
@@ -149,20 +150,29 @@ def serve(project: str, port: int) -> int:
     return 0
 
 
+def default_project() -> str:
+    """The only project under projects/, so a single-project setup needs no --project flag."""
+    names = sorted(p.stem for p in Path("projects").glob("*.yaml"))
+    if len(names) != 1:
+        sys.exit(f"pass --project (available: {', '.join(names) or 'none'})")
+    return names[0]
+
+
 def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(prog="autodev")
     sub = parser.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("check", help="verify tracker connectivity")
-    p.add_argument("--project", default="demo")
+    p.add_argument("--project", default=None)
     t = sub.add_parser("triage", help="triage all ready tickets")
-    t.add_argument("--project", default="demo")
+    t.add_argument("--project", default=None)
     f = sub.add_parser("fix", help="fix all approved tickets (status In lavorazione)")
-    f.add_argument("--project", default="demo")
+    f.add_argument("--project", default=None)
     sv = sub.add_parser("serve", help="start the local dashboard")
-    sv.add_argument("--project", default="demo")
+    sv.add_argument("--project", default=None)
     sv.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
+    args.project = args.project or default_project()
     if args.cmd == "check":
         sys.exit(asyncio.run(check(args.project)))
     if args.cmd == "serve":

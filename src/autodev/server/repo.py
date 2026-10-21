@@ -18,7 +18,7 @@ def repo_state(cfg: ProjectConfig) -> dict:
     ahead_behind = _git(path, "rev-list", "--left-right", "--count", f"HEAD...{base}").split()
     merged = set(_git(path, "branch", "--merged", base, "--format=%(refname:short)").split())
     branches = []
-    for name in _git(path, "branch", "--list", "autodev/*", "--format=%(refname:short)").split():
+    for name in _git(path, "branch", "--list", f"{cfg.branch_prefix}/*", "--format=%(refname:short)").split():
         branches.append({
             "name": name,
             "merged": name in merged,
@@ -35,7 +35,7 @@ def repo_state(cfg: ProjectConfig) -> dict:
         "path": str(path),
         "base_branch": cfg.base_branch,
         "branch": branch,
-        "on_agent_branch": branch.startswith("autodev/"),
+        "on_agent_branch": branch.startswith(f"{cfg.branch_prefix}/"),
         "dirty": dirty,
         "clean": not dirty,
         "ahead": int(ahead_behind[0]) if len(ahead_behind) == 2 else None,

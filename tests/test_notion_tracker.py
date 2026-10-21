@@ -98,3 +98,11 @@ async def test_bot_comments_are_recognised_by_display_name_and_returned_for_the_
     tracker = NotionTracker(cfg.tracker, token="x")
     assert await tracker.bot_comments("page-1") == ["Triage: ready"]
     await tracker.aclose()
+
+
+def test_tracker_column_names_can_be_overridden_per_project():
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    assert cfg.tracker.prop("title") == "Titolo"
+    cfg.tracker.properties = {"title": "Name"}
+    assert cfg.tracker.prop("title") == "Name"
+    assert cfg.tracker.prop("status") == "Stato"

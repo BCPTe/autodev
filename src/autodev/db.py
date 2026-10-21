@@ -4,13 +4,14 @@ WAL mode lets the dashboard read while a CLI run is writing, so a run started fr
 shows up live in the dashboard without any other plumbing.
 """
 import json
+import os
 import sqlite3
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "autodev.db"
+DEFAULT_PATH = Path(os.environ.get("AUTODEV_DB") or Path(__file__).resolve().parents[2] / "data" / "autodev.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (

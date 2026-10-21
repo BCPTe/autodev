@@ -7,11 +7,25 @@ from pydantic import BaseModel
 from autodev.models import Status
 
 
+DEFAULT_PROPERTIES = {
+    "title": "Titolo", "status": "Stato", "kind": "Tipo", "area": "Area", "priority": "Priorità",
+    "environment": "Ambiente", "page_url": "URL pagina", "reported_by": "Segnalato da",
+    "authorized": "Autorizzato", "attempts": "Tentativi", "cost": "Costo (USD)", "model": "Modello",
+    "risk": "Rischio", "branch": "Branch", "pr": "PR", "agent_note": "Note agente",
+    "verification": "Esito verifica", "attachments": "Allegati",
+}
+
+
 class TrackerConfig(BaseModel):
     type: str
     database_id: str
     data_source_id: str
     status_map: dict[Status, str]
+    properties: dict[str, str] = {}
+
+    def prop(self, key: str) -> str:
+        """Name of the tracker column that holds `key`; override any of them under `tracker.properties`."""
+        return self.properties.get(key) or DEFAULT_PROPERTIES[key]
 
 
 class Limits(BaseModel):
@@ -36,6 +50,7 @@ class AgentConfig(BaseModel):
     max_turns: int = 15
     allowed_bash: list[str] = []
     commands: str = ""
+    instructions: str = ""
 
 
 class Check(BaseModel):
@@ -59,6 +74,9 @@ class PRConfig(BaseModel):
 
 
 class ProjectConfig(BaseModel):
+    name: str = ""
+    language: str = "Italian"
+    branch_prefix: str = "autodev"
     repo: str
     base_branch: str
     local_path: str

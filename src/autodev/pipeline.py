@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import httpx
 
 from autodev.agents.triage import RunInfo, TriageResult, escalate_risk, run_triage
@@ -178,7 +180,7 @@ async def fix_ticket(
     ws = Workspace.create(cfg, ticket)
     await tracker.update(ticket.id, attempts=ticket.attempts + 1)
     if report:
-        where = "checkout di demo" if ws.inplace else ws.path.name
+        where = f"checkout di {cfg.name or Path(cfg.local_path).name}" if ws.inplace else ws.path.name
         report(f"workspace: {where} ({'ripreso, ' + str(len(ws.history().splitlines())) + ' righe di storia' if ws.resumed else 'nuovo'}), branch {ws.branch}")
     models_used: list[str] = []
     try:
