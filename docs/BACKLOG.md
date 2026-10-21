@@ -13,6 +13,6 @@ Ordered by what unblocks the most. Done items live in git history, not here.
 5. **`autodev cleanup`.** Delete `autodev/*` branches already merged into the base branch (local and remote), and remove leftover clones in `workspaces/`.
 6. **Notion views.** Inbox (Nuovo + Autorizzato), Da rivedere, Serve info, Chiusi.
 7. **Automatic UI check.** With in-place mode the Docker stack already serves the ticket branch, so Playwright (`e2e/demo`) can run against `localhost:3000` as part of verification for changes that touch the frontend.
-8. **Model column for triage.** Today the "Modello" column only drives the fix agent; triage always cascades Haiku -> Sonnet.
+8. **Model column for triage.** Today the "Model" column only drives the fix agent; triage always cascades Haiku -> Sonnet.
 9. **Mutation testing as a tool.** Move the AST mutation sampler used for the test audit into this repo and run it on demand per module.
 10. **Triage should recognise duplicates** (the old "Duplicato" state was dropped because nothing could set it).

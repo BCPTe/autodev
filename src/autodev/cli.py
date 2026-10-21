@@ -27,7 +27,7 @@ async def check(project: str) -> int:
         props = await tracker.verify()
         print(f"Notion OK: data source reachable, {len(props)} properties")
         tickets = await tracker.fetch_ready()
-        print(f"Ready tickets (status Nuovo + Autorizzato): {len(tickets)}")
+        print(f"Ready tickets (status New + Authorized): {len(tickets)}")
         for t in tickets:
             print(f"  - {t.title} [{t.kind}/{t.area}/{t.priority}]")
         print(await verify_access(cfg))
@@ -42,12 +42,12 @@ async def check(project: str) -> int:
 async def explain_idle(tracker: NotionTracker, wanted: Status, wanted_label: str) -> None:
     """Say why nothing ran: list tickets sitting in other states and what to do with them."""
     labels = tracker._cfg.status_map
-    print(f"Nessun ticket in '{labels[wanted]}' con 'Autorizzato' spuntato: niente da fare.")
+    print(f"Nessun ticket in '{labels[wanted]}' con 'Authorized' spuntato: niente da fare.")
     hints = {
-        Status.NEW: "non autorizzato: spunta 'Autorizzato'",
+        Status.NEW: "non autorizzato: spunta 'Authorized'",
         Status.NEEDS_INFO: "rispondi con un commento e riportalo in 'Nuovo'",
         Status.ANALYZED: "se l'analisi ti convince, spostalo in 'In lavorazione'",
-        Status.ESCALATED: "guarda 'Note agente' per il motivo",
+        Status.ESCALATED: "guarda 'Agent notes' per il motivo",
     }
     for status, hint in hints.items():
         if status == wanted and status != Status.NEW:

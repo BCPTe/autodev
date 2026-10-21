@@ -8,11 +8,11 @@ from autodev.models import Status
 
 
 DEFAULT_PROPERTIES = {
-    "title": "Titolo", "status": "Stato", "kind": "Tipo", "area": "Area", "priority": "Priorità",
-    "environment": "Ambiente", "page_url": "URL pagina", "reported_by": "Segnalato da",
-    "authorized": "Autorizzato", "attempts": "Tentativi", "cost": "Costo (USD)", "model": "Modello",
-    "risk": "Rischio", "branch": "Branch", "pr": "PR", "agent_note": "Note agente",
-    "verification": "Esito verifica", "attachments": "Allegati",
+    "title": "Title", "status": "Status", "kind": "Type", "area": "Area", "priority": "Priority",
+    "environment": "Environment", "page_url": "Page URL", "reported_by": "Reported by",
+    "authorized": "Authorized", "attempts": "Attempts", "cost": "Cost (USD)", "model": "Model",
+    "risk": "Risk", "branch": "Branch", "pr": "PR", "agent_note": "Agent notes",
+    "verification": "Verification result", "attachments": "Attachments",
 }
 
 

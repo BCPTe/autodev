@@ -170,7 +170,7 @@ async def fix_ticket(
     cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, report: Report | None = None
 ) -> FixOutcome:
     if ticket.attempts >= cfg.limits.max_fix_runs:
-        await _escalate(tracker, ticket, f"già eseguito {ticket.attempts} volte (limite {cfg.limits.max_fix_runs}); azzera 'Tentativi' per riprovare", 0.0)
+        await _escalate(tracker, ticket, f"già eseguito {ticket.attempts} volte (limite {cfg.limits.max_fix_runs}); azzera 'Attempts' per riprovare", 0.0)
         return FixOutcome(Status.ESCALATED, message="max fix runs")
 
     if remaining_budget(cfg, ticket) < MIN_USEFUL_BUDGET:

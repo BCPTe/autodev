@@ -17,18 +17,18 @@ def _page(authorized: bool = True) -> dict:
     return {
         "id": "page-1",
         "properties": {
-            "Titolo": {"title": [{"plain_text": "Export PDF vuoto"}]},
-            "Stato": {"status": {"name": "Nuovo"}},
-            "Tipo": sel("Bug"),
+            "Title": {"title": [{"plain_text": "Export PDF vuoto"}]},
+            "Status": {"status": {"name": "Nuovo"}},
+            "Type": sel("Bug"),
             "Area": sel("Export PDF"),
-            "Priorità": sel("Alta"),
-            "Ambiente": sel("Staging"),
-            "URL pagina": {"url": "https://staging.example.com/orders/1"},
-            "Segnalato da": {"rich_text": [{"plain_text": "Mario"}]},
-            "Autorizzato": {"checkbox": authorized},
-            "Tentativi": {"number": None},
-            "Costo (USD)": {"number": 0.25},
-            "Allegati": {"files": [{"name": "shot.png"}]},
+            "Priority": sel("Alta"),
+            "Environment": sel("Staging"),
+            "Page URL": {"url": "https://staging.example.com/orders/1"},
+            "Reported by": {"rich_text": [{"plain_text": "Mario"}]},
+            "Authorized": {"checkbox": authorized},
+            "Attempts": {"number": None},
+            "Cost (USD)": {"number": 0.25},
+            "Attachments": {"files": [{"name": "shot.png"}]},
         },
     }
 
@@ -102,7 +102,7 @@ async def test_bot_comments_are_recognised_by_display_name_and_returned_for_the_
 
 def test_tracker_column_names_can_be_overridden_per_project():
     cfg = load_project(ROOT / "projects" / "demo.yaml")
-    assert cfg.tracker.prop("title") == "Titolo"
+    assert cfg.tracker.prop("title") == "Title"
     cfg.tracker.properties = {"title": "Name"}
     assert cfg.tracker.prop("title") == "Name"
-    assert cfg.tracker.prop("status") == "Stato"
+    assert cfg.tracker.prop("status") == "Status"

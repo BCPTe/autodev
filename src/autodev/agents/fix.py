@@ -99,7 +99,7 @@ def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", 
 
 
 def pick_model(cfg: ProjectConfig, ticket: Ticket, attempt: int) -> str:
-    """The model chosen in the ticket's "Modello" column, or an automatic pick.
+    """The model chosen in the ticket's "Model" column, or an automatic pick.
 
     Auto starts with the first model of ``agents.fix.models`` and moves to the next one
     on each retry, so a stronger model is only paid for when the cheaper one failed.
