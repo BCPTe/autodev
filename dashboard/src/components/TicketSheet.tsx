@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton"
 import { Lamp } from "@/components/Lamp"
 import { StateLabel } from "@/components/StateLabel"
+import { CommentBox, History, TicketControls } from "@/components/TicketControls"
 import { useTicket } from "@/hooks/queries"
 import { ago, duration, money, shortModel } from "@/lib/format"
 import { KIND_LABEL, RUN_LABEL, RUN_LAMP, STATES } from "@/lib/status"
@@ -44,15 +45,15 @@ export function TicketSheet() {
 
         {t && data && (
           <div className="space-y-6 p-4">
+            <TicketControls ticket={t} />
+
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
               <Field label="Area">{t.area}</Field>
               <Field label="Priorità">{t.priority}</Field>
               <Field label="Rischio">{t.risk}</Field>
-              <Field label="Modello">{t.model ?? "Auto"}</Field>
               <Field label="Tentativi di fix">{t.attempts}</Field>
               <Field label="Costo">{money(t.cost_usd)}</Field>
               <Field label="Esito verifica">{t.verification}</Field>
-              <Field label="Autorizzato">{t.authorized ? "Sì" : "No"}</Field>
               <Field label="Aggiornato">{ago(t.updated_at)}</Field>
             </dl>
 
@@ -94,6 +95,7 @@ export function TicketSheet() {
                   </li>
                 ))}
               </ol>
+              <CommentBox ticketId={t.id} />
             </section>
 
             <section>
@@ -112,6 +114,8 @@ export function TicketSheet() {
                 ))}
               </ul>
             </section>
+
+            <History actions={data.actions} />
 
             {t.url && (
               <a href={t.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline-offset-4 hover:underline">

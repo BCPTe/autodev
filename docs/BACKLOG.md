@@ -3,7 +3,7 @@
 Ordered by what unblocks the most. Done items live in git history, not here.
 
 ## Next
-0. **Dashboard** (see [DASHBOARD_PLAN.md](DASHBOARD_PLAN.md)). Supersedes the standalone `autodev run`: the orchestrator loop, daily spend cap, quiet hours and notifications become part of `autodev serve`.
+0. **Dashboard** ([DASHBOARD_PLAN.md](DASHBOARD_PLAN.md)): phases 0-2 done (foundation, read-only views, controls). Next: 3 interactive agents (chat, interrupt, permission prompts), 4 repo and PRs, 5 automation polish. Browser tests for the dashboard (`e2e/autodev`, on `demo_server.py`) still to write.
 1. **Pull requests.** (enabled; first real PR pending) `GITHUB_TOKEN` in `.env`, `pr.create: true`, state `Da rivedere` links the PR. Replaces the manual merge into `staging`. Includes updating an already open PR when a ticket is re-run (done in `github.py`, untested against the real API).
 2. **`autodev run`.** Polling loop (triage then fix) with a lock, a **daily spend cap** (the per-ticket cap of $6 exists, the daily one does not), quiet hours, and a `systemd --user` service.
 3. **Merge conflicts resolved by the agent.** When the base branch moved and merging it into the ticket branch conflicts (as happened on `scia_sue_calabria_fields.json`), hand both versions to the fix agent in the same run instead of stopping.

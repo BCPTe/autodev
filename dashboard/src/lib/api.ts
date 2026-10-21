@@ -28,6 +28,31 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const post = <T,>(path: string, body: unknown) => api<T>(path, { method: "POST", body: JSON.stringify(body) })
+export const put = <T,>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) })
+export const patch = <T,>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) })
+
+export type Mode = "auto" | "supervised" | "manual" | "paused"
+
+export interface Control {
+  mode: Mode
+  modes: Mode[]
+  my_turn: boolean
+  my_turn_since: number | null
+  busy: boolean
+  daily_cap: number
+  spent_today: number
+  blocked: string | null
+  auto_approve_risks: string[]
+  poll_seconds: number
+  next_check: number | null
+}
+
+export interface TicketAction {
+  ts: number
+  actor: "user" | "auto"
+  action: string
+  detail: string
+}
 
 export type TicketState = "new" | "needs_info" | "analyzed" | "in_progress" | "review" | "escalated" | "closed"
 
@@ -107,6 +132,7 @@ export interface Overview {
   recent_problems: Run[]
   inbox: InboxItem[]
   repo: { branch: string; clean: boolean; on_agent_branch: boolean }
+  control: Control
 }
 
 export interface Costs {
@@ -146,4 +172,5 @@ export interface Config {
   pr_enabled: boolean
   never_automerge: string[]
   daily_cap_effective: number
+  autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[] }
 }

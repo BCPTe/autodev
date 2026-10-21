@@ -73,6 +73,15 @@ class PRConfig(BaseModel):
     slug: str | None = None
 
 
+class Autonomy(BaseModel):
+    """What the orchestrator may do on its own (the dashboard's mode switch overrides `default_mode`)."""
+
+    default_mode: Literal["auto", "supervised", "manual", "paused"] = "manual"
+    poll_seconds: int = 60
+    retry_cooldown_seconds: int = 1800
+    auto_approve_risks: list[str] = ["Basso", "Medio"]
+
+
 class ProjectConfig(BaseModel):
     name: str = ""
     language: str = "Italian"
@@ -85,6 +94,7 @@ class ProjectConfig(BaseModel):
     environments: dict[str, Environment] = {}
     risk: RiskConfig = RiskConfig()
     limits: Limits = Limits()
+    autonomy: Autonomy = Autonomy()
     agents: dict[str, AgentConfig] = {}
     model_choices: dict[str, str] = {}
     area_map: str | None = None

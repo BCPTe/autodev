@@ -1,8 +1,9 @@
 import asyncio
 import json
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 from autodev.config import ProjectConfig
 from autodev.db import Database
+from autodev.engine import Engine, Refused
 from autodev.jobs import daily_cap, mark_orphans, spent_today, start_of_today
 from autodev.models import Comment, Status, Ticket
 from autodev.server import auth as authmod
@@ -33,6 +35,27 @@ class TrackerLike(Protocol):
     async def detail(self, ticket_id: str) -> tuple[Ticket, list[Comment]]: ...
 
 
+class Control(BaseModel):
+    mode: str | None = None
+    my_turn: bool | None = None
+    daily_budget_usd: float | None = None
+
+
+class TicketEdit(BaseModel):
+    status: Status | None = None
+    authorized: bool | None = None
+    model: str | None = None
+    attempts: int | None = None
+
+
+class StartJob(BaseModel):
+    kind: Literal["triage", "fix"]
+
+
+class CommentBody(BaseModel):
+    text: str
+
+
 class Credentials(BaseModel):
     password: str
 
@@ -42,11 +65,25 @@ class Setup(BaseModel):
     code: str
 
 
-def create_app(cfg: ProjectConfig, project: str, db: Database, tracker: TrackerLike, *, static_dir: Path | None = DIST) -> FastAPI:
-    app = FastAPI(title="autodev", docs_url=None, redoc_url=None, openapi_url=None)
+def create_app(
+    cfg: ProjectConfig, project: str, db: Database, tracker: TrackerLike, *,
+    static_dir: Path | None = DIST, engine: Engine | None = None, run_loop: bool = False,
+) -> FastAPI:
+    engine = engine or Engine(cfg, project, db, tracker)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        loop = asyncio.ensure_future(engine.run_forever()) if run_loop else None
+        yield
+        if loop:
+            loop.cancel()
+
+    app = FastAPI(title="autodev", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     auth = Auth(db)
     app.state.auth = auth
+    app.state.engine = engine
     cache: dict[str, Any] = {"at": 0.0, "tickets": []}
+    engine.on_change = lambda: cache.update(at=0.0)
     mark_orphans(db)
 
     @app.middleware("http")
@@ -147,6 +184,7 @@ def create_app(cfg: ProjectConfig, project: str, db: Database, tracker: TrackerL
             "recent_problems": problems,
             "inbox": inbox,
             "repo": {k: v for k, v in repo_state(cfg).items() if k in {"branch", "clean", "on_agent_branch"}},
+            "control": engine.state(),
         }
 
     @app.get("/api/tickets", dependencies=[Depends(require_session)])
@@ -171,7 +209,8 @@ def create_app(cfg: ProjectConfig, project: str, db: Database, tracker: TrackerL
         except Exception as e:
             raise HTTPException(502, f"Notion non raggiungibile: {e}")
         runs = [run_row(r) for r in db.query("SELECT * FROM runs WHERE ticket_id = ? ORDER BY started_at DESC", (ticket_id,))]
-        return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs}
+        actions = db.query("SELECT ts, actor, action, detail FROM actions WHERE ticket_id = ? ORDER BY id DESC LIMIT 30", (ticket_id,))
+        return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs, "actions": actions}
 
     @app.get("/api/runs", dependencies=[Depends(require_session)])
     def list_runs(limit: int = 50, ticket_id: str | None = None):
@@ -217,6 +256,81 @@ def create_app(cfg: ProjectConfig, project: str, db: Database, tracker: TrackerL
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
+    # ---- controls ------------------------------------------------------------------------
+    @app.get("/api/control", dependencies=[Depends(require_session)])
+    def control_state():
+        return engine.state()
+
+    @app.put("/api/control", dependencies=[Depends(require_session)])
+    def control_update(body: Control):
+        try:
+            if body.mode is not None:
+                engine.set_mode(body.mode)
+            if body.my_turn is not None:
+                engine.set_my_turn(body.my_turn)
+            if body.daily_budget_usd is not None:
+                engine.set_daily_cap(body.daily_budget_usd)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return engine.state()
+
+    @app.post("/api/control/stop-all", dependencies=[Depends(require_session)])
+    def stop_all():
+        return {"stopped": engine.stop()}
+
+    @app.post("/api/runs/{run_id}/cancel", dependencies=[Depends(require_session)])
+    def cancel_run(run_id: int):
+        row = db.one("SELECT status FROM runs WHERE id = ?", (run_id,))
+        if not row:
+            raise HTTPException(404, "run non trovato")
+        if row["status"] != "running":
+            raise HTTPException(409, "il run è già terminato")
+        engine.stop(run_id)
+        return {"ok": True}
+
+    @app.post("/api/tickets/{ticket_id}/start", dependencies=[Depends(require_session)])
+    async def start_job(ticket_id: str, body: StartJob):
+        try:
+            await engine.start(ticket_id, body.kind)
+        except Refused as e:
+            raise HTTPException(409, str(e))
+        except Exception as e:
+            raise HTTPException(502, f"Notion non raggiungibile: {e}")
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    @app.patch("/api/tickets/{ticket_id}", dependencies=[Depends(require_session)])
+    async def edit_ticket(ticket_id: str, body: TicketEdit):
+        changes = body.model_dump(exclude_none=True)
+        if not changes:
+            raise HTTPException(422, "nessuna modifica")
+        if "model" in changes and changes["model"] != "Auto" and changes["model"] not in cfg.model_choices:
+            raise HTTPException(422, f"modello sconosciuto: {changes['model']}")
+        if changes.get("attempts", 0) < 0:
+            raise HTTPException(422, "i tentativi non possono essere negativi")
+        try:
+            if "status" in changes:
+                await tracker.set_status(ticket_id, changes.pop("status"))
+            if changes:
+                await tracker.update(ticket_id, **changes)
+        except Exception as e:
+            raise HTTPException(502, f"Notion non ha accettato la modifica: {e}")
+        db.audit("user", "edit", ticket_id, json.dumps(body.model_dump(exclude_none=True), default=str))
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    @app.post("/api/tickets/{ticket_id}/comment", dependencies=[Depends(require_session)])
+    async def add_comment(ticket_id: str, body: CommentBody):
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "il commento è vuoto")
+        try:
+            await tracker.comment(ticket_id, text, as_human=True)
+        except Exception as e:
+            raise HTTPException(502, f"Notion non ha accettato il commento: {e}")
+        db.audit("user", "comment", ticket_id, text[:200])
+        return {"ok": True}
+
     @app.get("/api/costs", dependencies=[Depends(require_session)])
     def costs():
         day = "strftime('%Y-%m-%d', started_at, 'unixepoch', 'localtime')"
@@ -252,6 +366,8 @@ def create_app(cfg: ProjectConfig, project: str, db: Database, tracker: TrackerL
             "pr_enabled": cfg.pr.create,
             "never_automerge": cfg.risk.never_automerge,
             "daily_cap_effective": daily_cap(db, cfg.limits.daily_budget_usd),
+            "autonomy": cfg.autonomy.model_dump(),
+            "statuses": {k.value: v for k, v in cfg.tracker.status_map.items()},
             "started_today": start_of_today(),
         }
 

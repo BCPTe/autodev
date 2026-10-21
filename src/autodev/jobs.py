@@ -93,6 +93,7 @@ async def run_tracked(
     summarize: Callable[[T], RunSummary],
     daily_cap_usd: float,
     echo: Report | None = None,
+    launched: Callable[[], None] | None = None,
 ) -> T:
     spent = spent_today(db)
     cap = daily_cap(db, daily_cap_usd)
@@ -104,6 +105,8 @@ async def run_tracked(
         (project, ticket.id, ticket.title, kind, now(), os.getpid()),
     )
     add_event(db, run_id, "started", f"{kind} avviato")
+    if launched:
+        launched()
 
     def report(line: str) -> None:
         add_event(db, run_id, "log", line)

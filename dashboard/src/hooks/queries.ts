@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { api, type Comment, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
+import { api, type Comment, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
 
 export const useOverview = () =>
   useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 5000 })
@@ -11,7 +11,7 @@ export const useTicket = (id: string | null) =>
   useQuery({
     queryKey: ["ticket", id],
     enabled: !!id,
-    queryFn: () => api<{ ticket: Ticket; comments: Comment[]; runs: Run[] }>(`/api/tickets/${id}`),
+    queryFn: () => api<{ ticket: Ticket; comments: Comment[]; runs: Run[]; actions: TicketAction[] }>(`/api/tickets/${id}`),
   })
 
 export const useRuns = () =>

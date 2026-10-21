@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 
 from autodev.config import load_project
 from autodev.db import Database
-from autodev.jobs import DailyCapReached, RunCancelled, RunSummary, mark_orphans, run_tracked
+from autodev.engine import fix_job, triage_job
+from autodev.jobs import DailyCapReached, RunCancelled, mark_orphans, run_tracked
 from autodev.github import verify_access
 from autodev.models import Status
-from autodev.pipeline import fix_ticket, triage_ticket
 from autodev.trackers.notion import NotionTracker
 
 
@@ -70,13 +70,9 @@ async def triage(project: str) -> int:
         for ticket in tickets:
             print(f"Triage: {ticket.title}")
             try:
+                work, summarize = triage_job(cfg, tracker, ticket)
                 status, runs, comment = await run_tracked(
-                    db, project=project, ticket=ticket, kind="triage",
-                    work=lambda report: triage_ticket(cfg, tracker, ticket, report=report),
-                    summarize=lambda r: RunSummary(
-                        outcome=r[0].value, cost_usd=sum(x.cost_usd for x in r[1]),
-                        model=r[1][-1].model if r[1] else None, result_text=r[2],
-                    ),
+                    db, project=project, ticket=ticket, kind="triage", work=work, summarize=summarize,
                     daily_cap_usd=cfg.limits.daily_budget_usd,
                     echo=lambda line: print(f"  {line}", flush=True),
                 )
@@ -106,14 +102,9 @@ async def fix(project: str) -> int:
         for ticket in tickets:
             print(f"Fix: {ticket.title}")
             try:
+                work, summarize = fix_job(cfg, tracker, ticket)
                 outcome = await run_tracked(
-                    db, project=project, ticket=ticket, kind="fix",
-                    work=lambda report: fix_ticket(cfg, tracker, ticket, report=report),
-                    summarize=lambda o: RunSummary(
-                        outcome=o.status.value, cost_usd=o.cost_usd, model=o.models[-1] if o.models else None,
-                        branch=o.branch, pr_url=o.pr_url,
-                        result_text="\n".join([*(c.line() for c in o.checks), o.message]).strip() or None,
-                    ),
+                    db, project=project, ticket=ticket, kind="fix", work=work, summarize=summarize,
                     daily_cap_usd=cfg.limits.daily_budget_usd,
                     echo=lambda line: print(f"  {line}", flush=True),
                 )
@@ -141,7 +132,7 @@ def serve(project: str, port: int) -> int:
     if not token:
         print("NOTION_TOKEN missing in .env")
         return 1
-    app = create_app(cfg, project, Database(), NotionTracker(cfg.tracker, token))
+    app = create_app(cfg, project, Database(), NotionTracker(cfg.tracker, token), run_loop=True)
     code = app.state.auth.setup_code
     print(f"\nautodev dashboard: http://localhost:{port}")
     if code:

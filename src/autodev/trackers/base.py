@@ -14,7 +14,7 @@ class Tracker(Protocol):
 
     async def set_status(self, ticket_id: str, status: Status) -> None: ...
 
-    async def comment(self, ticket_id: str, text: str) -> None: ...
+    async def comment(self, ticket_id: str, text: str, *, as_human: bool = False) -> None: ...
 
     async def update(
         self,
@@ -27,4 +27,6 @@ class Tracker(Protocol):
         cost_usd: float | None = None,
         agent_note: str | None = None,
         verification: str | None = None,
+        authorized: bool | None = None,
+        model: str | None = None,
     ) -> None: ...

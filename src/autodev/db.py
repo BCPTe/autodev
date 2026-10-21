@@ -44,6 +44,15 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_run ON events(run_id, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    ticket_id TEXT,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS actions_ticket ON actions(ticket_id, id);
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     created_at REAL NOT NULL,
@@ -76,6 +85,13 @@ class Database:
     def one(self, sql: str, params: tuple | dict = ()) -> dict[str, Any] | None:
         rows = self.query(sql, params)
         return rows[0] if rows else None
+
+    def audit(self, actor: str, action: str, ticket_id: str | None = None, detail: str = "") -> None:
+        """Who decided what: `actor` is 'user' (the dashboard) or 'auto' (the orchestrator)."""
+        self.execute(
+            "INSERT INTO actions(ts, actor, action, ticket_id, detail) VALUES(?, ?, ?, ?, ?)",
+            (now(), actor, action, ticket_id, detail),
+        )
 
     def close(self) -> None:
         self._conn.close()

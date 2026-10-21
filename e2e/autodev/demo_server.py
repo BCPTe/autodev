@@ -5,6 +5,7 @@ A run is left in progress and keeps appending events for a while, to exercise th
 """
 import asyncio
 import sys
+import threading
 import tempfile
 import time
 from pathlib import Path
@@ -13,7 +14,9 @@ import uvicorn
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autodev import engine as engine_mod  # noqa: E402
 from autodev.db import Database  # noqa: E402
+from autodev.engine import Engine  # noqa: E402
 from autodev.models import Comment, Status, Ticket  # noqa: E402
 from autodev.server.app import create_app  # noqa: E402
 from tests.fixture_repo import make_project  # noqa: E402
@@ -45,6 +48,17 @@ class FakeTracker:
 
     async def list_all(self):
         return self._t
+
+    async def set_status(self, ticket_id, status):
+        next(t for t in self._t if t.id == ticket_id).status = status
+
+    async def update(self, ticket_id, **kw):
+        t = next(t for t in self._t if t.id == ticket_id)
+        for k, v in kw.items():
+            setattr(t, k, v)
+
+    async def comment(self, ticket_id, text, *, as_human=False):
+        self.comments = getattr(self, "comments", []) + [(ticket_id, text, as_human)]
 
     async def detail(self, ticket_id):
         t = next(t for t in self._t if t.id == ticket_id).model_copy(
@@ -90,18 +104,47 @@ async def feed(db: Database, run_id: int) -> None:
     db.execute("INSERT INTO events(run_id, ts, type, text) VALUES(?,?,?,?)", (run_id, time.time(), "finished", "review"))
 
 
+def fake_agents() -> None:
+    """Triage and fix that only narrate and move the ticket, so the controls can be exercised."""
+
+    async def triage(cfg, tracker, ticket, report=None):
+        for line in ["legge il codice dell'area", "forma un'ipotesi", "fine: ready, confidenza high"]:
+            report(line)
+            await asyncio.sleep(1)
+        await tracker.set_status(ticket.id, Status.ANALYZED)
+        return Status.ANALYZED, [], "Triage: ready (demo)"
+
+    class Outcome:
+        status = Status.REVIEW
+        cost_usd = 0.4
+        models = ["claude-sonnet-5-5"]
+        branch = "autodev/demo"
+        pr_url = None
+        checks = []
+        message = "demo"
+
+    async def fix(cfg, tracker, ticket, report=None):
+        for line in ["legge il file", "scrive il test", "esegue i test"]:
+            report(line)
+            await asyncio.sleep(1)
+        await tracker.set_status(ticket.id, Status.REVIEW)
+        return Outcome()
+
+    engine_mod.triage_ticket, engine_mod.fix_ticket = triage, fix
+
+
 def main() -> None:
     port, db_path = int(sys.argv[1]), sys.argv[2]
     Path(db_path).unlink(missing_ok=True)
     db = Database(db_path)
     cfg = make_project(Path(tempfile.mkdtemp(prefix="autodev-demo-")))
     live = seed(db)
-    app = create_app(cfg, "demo", db, FakeTracker())
+    fake_agents()
+    tracker = FakeTracker()
+    app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker))
     print(f"SETUP_CODE={app.state.auth.setup_code}", flush=True)
 
-    @app.on_event("startup")
-    async def start_feed():
-        asyncio.get_event_loop().create_task(feed(db, live))
+    threading.Thread(target=lambda: asyncio.run(feed(db, live)), daemon=True).start()
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

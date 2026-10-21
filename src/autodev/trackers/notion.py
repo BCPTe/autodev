@@ -17,12 +17,31 @@ def _select(prop: dict) -> str | None:
     return sel["name"] if sel else None
 
 
+HUMAN_PREFIX = "[dashboard] "
+
+
+def _raw_text(comment: dict) -> str:
+    return _text(comment, "rich_text") or ""
+
+
+def _from_dashboard(comment: dict) -> bool:
+    """Comments typed in the dashboard are posted through the integration but written by a person."""
+    return _raw_text(comment).startswith(HUMAN_PREFIX)
+
+
 def _is_bot(comment: dict) -> bool:
     """Notion puts no `type` in a comment's created_by; the author kind is in display_name."""
-    return (comment.get("display_name") or {}).get("type") == "integration"
+    return (comment.get("display_name") or {}).get("type") == "integration" and not _from_dashboard(comment)
+
+
+def _comment_text(comment: dict) -> str:
+    text = _raw_text(comment)
+    return text[len(HUMAN_PREFIX):] if text.startswith(HUMAN_PREFIX) else text
 
 
 def _author(comment: dict) -> str:
+    if _from_dashboard(comment):
+        return "dashboard"
     return (comment.get("display_name") or {}).get("resolved_name") or ("autodev" if _is_bot(comment) else "persona")
 
 
@@ -125,7 +144,7 @@ class NotionTracker:
             Comment(
                 author=_author(x),
                 is_bot=_is_bot(x),
-                text=_text(x, "rich_text") or "",
+                text=_comment_text(x),
                 created_at=x.get("created_time"),
             )
             for x in c.json()["results"]
@@ -140,7 +159,7 @@ class NotionTracker:
         r = await self._client.get("/comments", params={"block_id": ticket_id, "page_size": 100})
         r.raise_for_status()
         return [
-            _text(c, "rich_text") or ""
+            _comment_text(c)
             for c in r.json()["results"]
             if _is_bot(c) == bot
         ]
@@ -156,7 +175,8 @@ class NotionTracker:
         c = self._cfg
         await self._patch(ticket_id, {c.prop("status"): {"status": {"name": self._cfg.status_map[status]}}})
 
-    async def comment(self, ticket_id: str, text: str) -> None:
+    async def comment(self, ticket_id: str, text: str, *, as_human: bool = False) -> None:
+        text = HUMAN_PREFIX + text if as_human else text
         r = await self._client.post(
             "/comments",
             json={"parent": {"page_id": ticket_id}, "rich_text": _rich(text)["rich_text"]},
@@ -174,9 +194,15 @@ class NotionTracker:
         cost_usd: float | None = None,
         agent_note: str | None = None,
         verification: str | None = None,
+        authorized: bool | None = None,
+        model: str | None = None,
     ) -> None:
         props: dict = {}
         c = self._cfg
+        if authorized is not None:
+            props[c.prop("authorized")] = {"checkbox": authorized}
+        if model is not None:
+            props[c.prop("model")] = {"select": {"name": model}}
         if risk is not None:
             props[c.prop("risk")] = {"select": {"name": risk.value}}
         if pr_url is not None:

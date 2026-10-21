@@ -28,6 +28,17 @@ class FakeTracker:
         self.calls += 1
         return self.tickets
 
+    async def set_status(self, ticket_id, status):
+        next(t for t in self.tickets if t.id == ticket_id).status = status
+
+    async def update(self, ticket_id, **kw):
+        t = next(t for t in self.tickets if t.id == ticket_id)
+        for k, v in kw.items():
+            setattr(t, k, v)
+
+    async def comment(self, ticket_id, text, *, as_human=False):
+        self.posted = getattr(self, "posted", []) + [(ticket_id, text, as_human)]
+
     async def detail(self, ticket_id):
         t = next(t for t in self.tickets if t.id == ticket_id)
         t = t.model_copy(update={"body": "descrizione"})
@@ -61,8 +72,10 @@ def seed_run(db, **kw):
 # ---- security -------------------------------------------------------------------------------
 def test_everything_but_auth_requires_a_session(env):
     c, *_ = env
-    for path in ["/api/overview", "/api/tickets", "/api/tickets/t1", "/api/runs", "/api/runs/1", "/api/costs", "/api/repo", "/api/config"]:
+    for path in ["/api/overview", "/api/tickets", "/api/tickets/t1", "/api/runs", "/api/runs/1", "/api/costs", "/api/repo", "/api/config", "/api/control"]:
         assert c.get(path).status_code == 401, path
+    for method, path in [("put", "/api/control"), ("post", "/api/control/stop-all"), ("post", "/api/runs/1/cancel"), ("post", "/api/tickets/t1/start"), ("patch", "/api/tickets/t1"), ("post", "/api/tickets/t1/comment")]:
+        assert getattr(c, method)(path, json={}).status_code == 401, path
 
 
 def test_first_run_setup_needs_the_one_time_code_and_a_long_password(env):
@@ -245,3 +258,60 @@ def test_spa_fallback_serves_index_and_keeps_unknown_api_paths_404(tmp_path):
     secret.write_text("TOP-SECRET")
     for attempt in ("/../secret.txt", "/%2e%2e/secret.txt", "/assets/../../secret.txt", "/..%2fsecret.txt"):
         assert "TOP-SECRET" not in c.get(attempt).text, attempt
+
+
+# ---- controls -------------------------------------------------------------------------------
+def test_mode_my_turn_and_daily_cap_can_be_changed_and_are_audited(client, env):
+    _, db, *_ = env
+    assert client.get("/api/control").json()["mode"] == "manual"
+    state = client.put("/api/control", json={"mode": "supervised", "my_turn": True, "daily_budget_usd": 7.5}).json()
+    assert (state["mode"], state["my_turn"], state["daily_cap"]) == ("supervised", True, 7.5)
+    assert client.get("/api/overview").json()["control"]["mode"] == "supervised"
+    assert {r["action"] for r in db.query("SELECT action FROM actions")} == {"mode", "my_turn", "daily_cap"}
+    assert client.put("/api/control", json={"mode": "turbo"}).status_code == 422
+    assert client.put("/api/control", json={"daily_budget_usd": 0}).status_code == 422
+
+
+def test_ticket_fields_are_edited_in_the_tracker(client, env):
+    _, db, tracker, _ = env
+    r = client.patch("/api/tickets/t1", json={"status": "in_progress", "authorized": True, "model": "Opus", "attempts": 0})
+    assert r.status_code == 200, r.text
+    t = tracker.tickets[0]
+    assert (t.status, t.authorized, t.model, t.attempts) == (Status.IN_PROGRESS, True, "Opus", 0)
+    assert db.one("SELECT actor, action, ticket_id FROM actions") == {"actor": "user", "action": "edit", "ticket_id": "t1"}
+    detail = client.get("/api/tickets/t1").json()
+    assert detail["actions"][0]["action"] == "edit"
+
+
+def test_invalid_ticket_edits_are_rejected_before_reaching_the_tracker(client, env):
+    _, _, tracker, _ = env
+    assert client.patch("/api/tickets/t1", json={}).status_code == 422
+    assert client.patch("/api/tickets/t1", json={"model": "GPT"}).status_code == 422
+    assert client.patch("/api/tickets/t1", json={"attempts": -1}).status_code == 422
+    assert client.patch("/api/tickets/t1", json={"status": "bogus"}).status_code == 422
+    assert tracker.tickets[0].model is None
+
+
+def test_comment_is_posted_as_a_person_and_empty_ones_are_refused(client, env):
+    _, _, tracker, _ = env
+    assert client.post("/api/tickets/t1/comment", json={"text": "  "}).status_code == 422
+    assert client.post("/api/tickets/t1/comment", json={"text": "  Solo la SCIA SUE  "}).status_code == 200
+    assert tracker.posted == [("t1", "Solo la SCIA SUE", True)]
+
+
+def test_start_is_refused_with_the_reason_when_the_mode_is_paused(client):
+    client.put("/api/control", json={"mode": "paused"})
+    r = client.post("/api/tickets/t3/start", json={"kind": "triage"})
+    assert r.status_code == 409 and "pausa" in r.json()["detail"]
+    assert client.post("/api/tickets/t3/start", json={"kind": "nope"}).status_code == 422
+
+
+def test_cancel_marks_a_running_run_and_refuses_finished_ones(client, env):
+    _, db, *_ = env
+    running = seed_run(db, status="running", finished_at=None)
+    done = seed_run(db)
+    assert client.post(f"/api/runs/{running}/cancel", json={}).status_code == 200
+    assert db.one("SELECT cancel_requested FROM runs WHERE id = ?", (running,))["cancel_requested"] == 1
+    assert client.post(f"/api/runs/{done}/cancel", json={}).status_code == 409
+    assert client.post("/api/runs/999/cancel", json={}).status_code == 404
+    assert client.post("/api/control/stop-all", json={}).json() == {"stopped": 1}

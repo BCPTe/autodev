@@ -2,6 +2,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom"
 import { ExternalLink } from "lucide-react"
 import { Lamp } from "@/components/Lamp"
 import { RunFeed } from "@/components/RunFeed"
+import { StopRun } from "@/components/StopRun"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRun } from "@/hooks/queries"
 import { useNow } from "@/hooks/useNow"
@@ -29,6 +30,7 @@ export function RunDetail() {
           <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
           <span className="tabular-nums text-muted-foreground">{money(r.cost_usd)}</span>
           <span className="text-muted-foreground">avviato {ago(r.started_at)}</span>
+          <StopRun run={r} />
           <button className="text-primary underline-offset-4 hover:underline" onClick={() => setParams({ ticket: r.ticket_id })}>Apri il ticket</button>
           {r.pr_url && <a className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline" href={r.pr_url} target="_blank" rel="noreferrer">Pull request <ExternalLink className="size-3.5" /></a>}
         </div>

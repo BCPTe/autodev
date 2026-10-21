@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader"
 import { PipelineRail } from "@/components/PipelineRail"
 import { RunFeed } from "@/components/RunFeed"
 import { Lamp } from "@/components/Lamp"
+import { StopRun } from "@/components/StopRun"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useOverview, useRuns, useTickets } from "@/hooks/queries"
 import { useNow } from "@/hooks/useNow"
@@ -86,6 +87,7 @@ export function Now() {
                   <Lamp kind="violet" live />
                   <Link to={`/runs/${r.id}`} className="font-medium underline-offset-4 hover:underline">{KIND_LABEL[r.kind]}: {r.ticket_title}</Link>
                   <span className="text-[13px] text-muted-foreground">{shortModel(r.model)} · <Elapsed run={r} /></span>
+                  <span className="ml-auto"><StopRun run={r} /></span>
                 </header>
                 <RunFeed runId={r.id} className="h-80" />
               </article>

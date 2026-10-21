@@ -106,3 +106,36 @@ def test_tracker_column_names_can_be_overridden_per_project():
     cfg.tracker.properties = {"title": "Name"}
     assert cfg.tracker.prop("title") == "Name"
     assert cfg.tracker.prop("status") == "Status"
+
+
+@respx.mock
+async def test_comment_typed_in_the_dashboard_counts_as_human_for_the_agents():
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    posted = respx.post(f"{API}/comments").mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{API}/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json={"results": [
+                {"display_name": {"type": "integration", "resolved_name": "autodev"}, "rich_text": [{"plain_text": "Triage: ready"}]},
+                {"display_name": {"type": "integration", "resolved_name": "autodev"}, "rich_text": [{"plain_text": "[dashboard] Solo la SCIA SUE"}]},
+            ]},
+        )
+    )
+    tracker = NotionTracker(cfg.tracker, token="x")
+    await tracker.comment("page-1", "Solo la SCIA SUE", as_human=True)
+    assert b"[dashboard] Solo la SCIA SUE" in posted.calls.last.request.content
+    assert await tracker.bot_comments("page-1") == ["Triage: ready"]
+    assert await tracker._comments("page-1", bot=False) == ["Solo la SCIA SUE"]
+    await tracker.aclose()
+
+
+@respx.mock
+async def test_authorized_and_model_are_written_to_their_columns():
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    patch = respx.patch(f"{API}/pages/page-1").mock(return_value=httpx.Response(200, json={}))
+    tracker = NotionTracker(cfg.tracker, token="x")
+    await tracker.update("page-1", authorized=True, model="Opus")
+    body = patch.calls.last.request.content
+    assert b'"Authorized":{"checkbox":true}' in body.replace(b" ", b"")
+    assert b'"Model":{"select":{"name":"Opus"}}' in body.replace(b" ", b"")
+    await tracker.aclose()

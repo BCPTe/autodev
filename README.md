@@ -34,6 +34,19 @@ First target: Acme (`projects/demo.yaml`).
 3. Put the Notion `database_id` / `data_source_id` and the status labels in `projects/<name>.yaml`.
 4. `uv run autodev check` verifies the connection and the columns.
 
+## Dashboard and autonomy
+
+`cd dashboard && npm install && npm run build`, then `uv run autodev serve` (127.0.0.1:8765, password set on first visit). From the top bar you choose how much autodev does alone:
+
+| Mode | Behaviour |
+|---|---|
+| Auto | Triages authorized tickets, approves analysed ones whose risk is in `autonomy.auto_approve_risks`, then fixes them |
+| Supervised | Triages and fixes by itself, but you approve the move to "In progress" |
+| Manual | Nothing starts until you press Start on a ticket (default, `autonomy.default_mode`) |
+| Paused | Nothing starts; "Stop all" interrupts running agents |
+
+"My turn" holds the checkout: no agent starts while you work in it. One agent runs at a time. Tickets can be authorized, approved, retried, closed, given a model and commented on from the dashboard; every decision is logged as made by you or by the automatic mode. A ticket whose run failed is not retried automatically for `autonomy.retry_cooldown_seconds`.
+
 ## Layout
 
 ```

@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, LayoutDashboard, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { ModeSwitch, MyTurn, Notice, StopAll } from "@/components/ControlBar"
 import { Lamp } from "@/components/Lamp"
 import { TicketSheet } from "@/components/TicketSheet"
 import { useOverview } from "@/hooks/queries"
@@ -90,9 +91,9 @@ export function Shell() {
           <Agents />
           <Budget />
           <div className="ml-auto flex items-center gap-1">
-            <span className="mr-2 rounded-sm border px-2 py-0.5 text-xs text-muted-foreground" title="In questa versione la dashboard mostra lo stato ma non comanda gli agenti">
-              Sola lettura
-            </span>
+            <StopAll />
+            <MyTurn />
+            <div className="mx-1"><ModeSwitch /></div>
             <Button variant="ghost" size="icon" aria-label={dark ? "Passa al tema chiaro" : "Passa al tema scuro"} onClick={() => setTheme(dark ? "light" : "dark")}>
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
@@ -101,6 +102,7 @@ export function Shell() {
             </Button>
           </div>
         </header>
+        <Notice />
         <main className="px-4 py-6 sm:px-6">
           <Outlet />
         </main>
