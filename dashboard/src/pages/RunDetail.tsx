@@ -1,6 +1,7 @@
 import { Link, useParams, useSearchParams } from "react-router-dom"
 import { ExternalLink } from "lucide-react"
 import { Lamp } from "@/components/Lamp"
+import { RunConsole } from "@/components/RunConsole"
 import { RunFeed } from "@/components/RunFeed"
 import { StopRun } from "@/components/StopRun"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,7 +38,8 @@ export function RunDetail() {
         {r.branch && <p className="mt-2 font-mono text-[13px]">{r.branch}</p>}
         {r.error && <p role="alert" className="mt-3 whitespace-pre-wrap rounded-sm border-l-2 border-destructive bg-muted/60 p-3 text-[13px]">{r.error}</p>}
       </div>
-      <RunFeed runId={id} className="h-[60vh]" />
+      <RunFeed runId={id} className="h-[55vh]" />
+      {r.status === "running" && <RunConsole runId={id} interactive={data.interactive} />}
     </>
   )
 }

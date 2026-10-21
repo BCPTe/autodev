@@ -111,7 +111,7 @@ export interface Run {
 export interface RunEvent {
   id: number
   ts: number
-  type: "started" | "log" | "result" | "finished" | "error" | "cancelled"
+  type: "started" | "log" | "result" | "finished" | "error" | "cancelled" | "user" | "agent" | "paused" | "permission" | "checkpoint" | "decision"
   text: string
   data: Record<string, unknown> | null
 }
@@ -120,6 +120,24 @@ export interface InboxItem {
   kind: "ticket"
   state: TicketState
   ticket: Pick<Ticket, "id" | "title" | "status" | "area" | "priority" | "risk" | "url" | "pr_url" | "branch" | "agent_note" | "updated_at">
+}
+
+export interface Approval {
+  id: number
+  run_id: number
+  kind: "permission" | "checkpoint"
+  title: string
+  detail: { tool?: string; input?: Record<string, unknown>; name?: string; files?: string[]; summary?: string; notes?: string; checks?: string[]; risk?: string }
+  created_at: number
+  ticket_id: string
+  ticket_title: string
+  run_kind: "triage" | "fix"
+}
+
+export interface Interactive {
+  live: boolean
+  state: "running" | "waiting" | "approval" | null
+  approvals: Approval[]
 }
 
 export interface Overview {
@@ -133,6 +151,7 @@ export interface Overview {
   inbox: InboxItem[]
   repo: { branch: string; clean: boolean; on_agent_branch: boolean }
   control: Control
+  approvals: Approval[]
 }
 
 export interface Costs {
@@ -172,5 +191,5 @@ export interface Config {
   pr_enabled: boolean
   never_automerge: string[]
   daily_cap_effective: number
-  autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[] }
+  autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[]; checkpoints: ("after_agent" | "before_pr")[] }
 }

@@ -47,6 +47,14 @@ First target: Acme (`projects/demo.yaml`).
 
 "My turn" holds the checkout: no agent starts while you work in it. One agent runs at a time. Tickets can be authorized, approved, retried, closed, given a model and commented on from the dashboard; every decision is logged as made by you or by the automatic mode. A ticket whose run failed is not retried automatically for `autonomy.retry_cooldown_seconds`.
 
+### Talking to the agents
+
+Runs started from the dashboard are interactive (runs started with `autodev triage|fix` in a terminal are not):
+- **Message:** writing to a running agent interrupts what it is doing and gives it your text as the next turn, keeping its whole context. **Pause** interrupts and waits for your next message.
+- **Permissions:** when an agent tries something outside its allowed commands, the run waits and the request shows up under "Da te" (allow once, allow for this run, or deny with a reason the agent reads). In Auto mode nobody is asked and the request is denied.
+- **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
+- Finished runs cannot be resumed with a chat yet.
+
 ## Layout
 
 ```

@@ -315,3 +315,43 @@ def test_cancel_marks_a_running_run_and_refuses_finished_ones(client, env):
     assert client.post(f"/api/runs/{done}/cancel", json={}).status_code == 409
     assert client.post("/api/runs/999/cancel", json={}).status_code == 404
     assert client.post("/api/control/stop-all", json={}).json() == {"stopped": 1}
+
+
+# ---- interactive agents ---------------------------------------------------------------------
+def test_talking_to_a_run_that_is_not_live_is_refused(client, env):
+    _, db, *_ = env
+    run_id = seed_run(db, status="running", finished_at=None)
+    assert client.post(f"/api/runs/{run_id}/message", json={"text": "ciao"}).status_code == 409
+    assert client.post(f"/api/runs/{run_id}/pause", json={}).status_code == 409
+    assert client.get(f"/api/runs/{run_id}").json()["interactive"]["live"] is False
+
+
+def test_pending_approvals_are_listed_and_decided_through_the_live_control(client, env):
+    import asyncio
+
+    from autodev.control import RunControl
+
+    _, db, _, app = env
+    run_id = seed_run(db, status="running", finished_at=None)
+    control = RunControl(db, lambda: "manual")
+    control.run_id = run_id
+    app.state.engine.controls[run_id] = control
+
+    async def scenario():
+        waiting = asyncio.ensure_future(control.ask("permission", "esegue docker ps", {"tool": "Bash"}))
+        await asyncio.sleep(0.05)
+        return waiting
+
+    loop = asyncio.new_event_loop()
+    waiting = loop.run_until_complete(scenario())
+    listed = client.get("/api/approvals").json()["approvals"]
+    assert [(a["title"], a["ticket_id"]) for a in listed] == [("esegue docker ps", "t1")]
+    assert client.get("/api/overview").json()["approvals"][0]["id"] == listed[0]["id"]
+    assert client.get(f"/api/runs/{run_id}").json()["interactive"]["state"] == "approval"
+    assert client.post(f"/api/approvals/{listed[0]['id']}", json={"decision": "maybe"}).status_code == 422
+    # the future lives on the test loop: decide on it through the API, then let the loop deliver it
+    assert client.post(f"/api/approvals/{listed[0]['id']}", json={"decision": "allow", "note": "ok"}).status_code == 200
+    assert loop.run_until_complete(waiting) == (True, "ok", False)
+    assert client.post(f"/api/approvals/{listed[0]['id']}", json={"decision": "deny"}).status_code == 409
+    assert client.get("/api/approvals").json()["approvals"] == []
+    loop.close()

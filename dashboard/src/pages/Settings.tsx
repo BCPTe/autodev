@@ -49,6 +49,7 @@ export function Settings() {
           <Row label="Approvazione automatica">Solo rischio {c.autonomy.auto_approve_risks.join(" e ")} (in modalità Auto)</Row>
           <Row label="Controllo del tabellone">Ogni {c.autonomy.poll_seconds} secondi (in Auto e Supervisionato)</Row>
           <Row label="Nuovo tentativo dopo un errore">Dopo {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minuti, oppure a mano</Row>
+          <Row label="Punti di approvazione">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "dopo l'agente, prima delle verifiche" : "prima della pull request")).join("; ") + " (non in modalità Auto)" : "Nessuno"}</Row>
           <Row label="Tetto giornaliero"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
         </dl>
 

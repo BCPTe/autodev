@@ -4,6 +4,7 @@ import httpx
 
 from autodev.agents.triage import RunInfo, TriageResult, escalate_risk, run_triage
 from autodev.config import ProjectConfig
+from autodev.control import checkpoint
 from autodev.models import Risk, Status, Ticket
 from autodev.progress import Progress, Report
 from autodev.trackers.base import Tracker
@@ -254,6 +255,15 @@ async def _fix_in_workspace(
             await _escalate(tracker, ticket, f"troppi file modificati ({len(files)} > {cfg.limits.max_files})", cost, ws.branch)
             return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, message="too many files")
 
+        approved, note = await checkpoint(
+            cfg.autonomy.checkpoints, "after_agent", f"L'agente ha finito ({len(files)} file): procedo con le verifiche?",
+            {"files": files, "summary": fix.summary, "notes": fix.notes},
+        )
+        if not approved:
+            ws.discard_changes()
+            await _escalate(tracker, ticket, "modifica non approvata prima delle verifiche" + (f": {note}" if note else ""), cost, ws.branch)
+            return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, message="rejected at checkpoint")
+
         ws.commit(f"fix: {ticket.title}\n\nTicket: {_notion_url(ticket.id)}")
         if report:
             report("verifica: gate di regressione e controlli...")
@@ -273,6 +283,15 @@ async def _fix_in_workspace(
     risk, flags = _risk_for_changes(cfg, ws, Risk.LOW)
     files = ws_files_in_head(ws)
     summary = "\n".join(["Verifiche:", *[f"- {c.line()}" for c in checks], f"Modello: {' -> '.join(models_used)}"])
+    approved, note = await checkpoint(
+        cfg.autonomy.checkpoints, "before_pr",
+        "Fix verificato: apro la pull request?" if cfg.pr.create else "Fix verificato: lo segno da rivedere?",
+        {"files": files, "summary": fix.summary, "checks": [c.line() for c in checks], "risk": risk.value},
+    )
+    if not approved:
+        await _escalate(tracker, ticket, "non approvato prima della pull request" + (f": {note}" if note else ""), cost, ws.branch)
+        return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, checks=checks, message="rejected at checkpoint")
+
     if cfg.pr.create:
         ws.push()
         pr_url = await create_pull_request(cfg, ws.branch, f"fix: {ticket.title}", pr_body(ticket, fix, checks, risk, flags, files))

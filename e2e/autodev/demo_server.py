@@ -6,6 +6,7 @@ A run is left in progress and keeps appending events for a while, to exercise th
 import asyncio
 import sys
 import threading
+from types import SimpleNamespace
 import tempfile
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from autodev import engine as engine_mod  # noqa: E402
+from autodev.control import checkpoint, current_control  # noqa: E402
 from autodev.db import Database  # noqa: E402
 from autodev.engine import Engine  # noqa: E402
 from autodev.models import Comment, Status, Ticket  # noqa: E402
@@ -124,9 +126,22 @@ def fake_agents() -> None:
         message = "demo"
 
     async def fix(cfg, tracker, ticket, report=None):
-        for line in ["legge il file", "scrive il test", "esegue i test"]:
+        control = current_control.get()
+        for line in ["legge il file", "scrive il test"]:
             report(line)
             await asyncio.sleep(1)
+        if control:
+            verdict = await control.can_use_tool("Bash", {"command": "docker compose ps"}, SimpleNamespace(title=None))
+            report("permesso " + verdict.behavior)
+            for _ in range(40):  # long enough to be paused or spoken to
+                await asyncio.sleep(0.5)
+                if control.take_interrupt():
+                    report("messaggio ricevuto: " + await control.next_instruction())
+                    break
+        approved, note = await checkpoint(["before_pr"], "before_pr", "Fix verificato: apro la pull request?", {"files": ["apps/frontend/derive.ts"], "summary": "Demo", "checks": ["PASS  regression test"]})
+        if not approved:
+            await tracker.set_status(ticket.id, Status.ESCALATED)
+            return Outcome()
         await tracker.set_status(ticket.id, Status.REVIEW)
         return Outcome()
 

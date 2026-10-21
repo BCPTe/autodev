@@ -1,8 +1,9 @@
 from typing import Literal
 
-from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, ToolUseBlock, query
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
+from autodev.agents.session import run_session
 from autodev.config import ProjectConfig
 from autodev.models import Ticket
 from autodev.progress import Progress
@@ -137,13 +138,13 @@ async def run_fix(
         max_budget_usd=budget_usd or cfg.limits.budget_usd_per_ticket,
         output_format={"type": "json_schema", "schema": FixResult.model_json_schema()},
     )
-    async for message in query(prompt=_prompt(ticket, triage_notes, previous_failure, ws.history()), options=options):
+    def on_message(message) -> None:
         if progress and isinstance(message, AssistantMessage):
             for block in message.content:
                 if isinstance(block, ToolUseBlock):
                     progress.tool(block.name, block.input, str(ws.path))
-        if isinstance(message, ResultMessage):
-            if message.is_error or message.structured_output is None:
-                raise RuntimeError(f"fix agent failed: {message.subtype} {message.errors or message.result}")
-            return FixResult.model_validate(message.structured_output), message.total_cost_usd or 0.0, message.num_turns
-    raise RuntimeError("fix agent produced no result")
+
+    message = await run_session(_prompt(ticket, triage_notes, previous_failure, ws.history()), options, on_message)
+    if message.is_error or message.structured_output is None:
+        raise RuntimeError(f"fix agent failed: {message.subtype} {message.errors or message.result}")
+    return FixResult.model_validate(message.structured_output), message.total_cost_usd or 0.0, message.num_turns

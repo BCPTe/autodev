@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router-dom"
 import { PageHeader } from "@/components/PageHeader"
 import { PipelineRail } from "@/components/PipelineRail"
 import { RunFeed } from "@/components/RunFeed"
+import { ApprovalCard } from "@/components/ApprovalCard"
 import { Lamp } from "@/components/Lamp"
 import { StopRun } from "@/components/StopRun"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -38,7 +39,10 @@ export function Now() {
       <div className="mt-12 grid gap-10 lg:grid-cols-2">
         <section aria-labelledby="da-te">
           <h2 id="da-te" className="mb-3 text-xl font-semibold">Da te</h2>
-          {overview && inbox.length === 0 && problems.length === 0 && <p className="text-muted-foreground">Niente da decidere.</p>}
+          {overview && overview.approvals.length > 0 && (
+            <div className="mb-4 space-y-3">{overview.approvals.map((a) => <ApprovalCard key={a.id} a={a} />)}</div>
+          )}
+          {overview && inbox.length === 0 && problems.length === 0 && overview.approvals.length === 0 && <p className="text-muted-foreground">Niente da decidere.</p>}
           <ul className="divide-y border-y">
             {problems.map((r) => (
               <li key={`run-${r.id}`}>

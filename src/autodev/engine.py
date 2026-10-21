@@ -12,6 +12,7 @@ import time
 from typing import Callable
 
 from autodev.config import ProjectConfig
+from autodev.control import RunControl, current_control
 from autodev.db import Database
 from autodev.jobs import DailyCapReached, RunCancelled, RunSummary, daily_cap, run_tracked, spent_today
 from autodev.models import Status, Ticket
@@ -59,6 +60,7 @@ class Engine:
         self.cfg, self.project, self.db, self.tracker, self._clock = cfg, project, db, tracker, clock
         self.on_change: Callable[[], None] = lambda: None
         self.notice: str | None = None
+        self.controls: dict[int, RunControl] = {}
         self._launching = False
         self._tasks: set[asyncio.Task] = set()
         self._tried: dict[tuple[str, str], float] = {}
@@ -153,10 +155,12 @@ class Engine:
         job = triage_job if kind == "triage" else fix_job
         work, summarize = job(self.cfg, self.tracker, ticket)
         self._tried[(ticket.id, ticket.status.value)] = self._clock()
+        control = RunControl(self.db, lambda: self.mode)
+        current_control.set(control)
         try:
             await run_tracked(
                 self.db, project=self.project, ticket=ticket, kind=kind, work=work, summarize=summarize,
-                daily_cap_usd=self.cfg.limits.daily_budget_usd, launched=self._release,
+                daily_cap_usd=self.cfg.limits.daily_budget_usd, launched=lambda run_id: self._release(run_id, control),
             )
         except DailyCapReached as e:
             self.notice = str(e)
@@ -166,10 +170,14 @@ class Engine:
             pass  # run_tracked has already recorded the failure on the run
         finally:
             self._launching = False
+            if control.run_id is not None:
+                self.controls.pop(control.run_id, None)
             self.on_change()
 
-    def _release(self) -> None:
-        """The run row exists now, so the database reports busy by itself."""
+    def _release(self, run_id: int, control: RunControl) -> None:
+        """The run row exists now: the database reports busy by itself, and the run can be talked to."""
+        control.run_id = run_id
+        self.controls[run_id] = control
         self._launching = False
 
     def stop(self, run_id: int | None = None, actor: str = "user") -> int:

@@ -48,6 +48,15 @@ class TicketEdit(BaseModel):
     attempts: int | None = None
 
 
+class Decision(BaseModel):
+    decision: Literal["allow", "allow_run", "deny"]
+    note: str = ""
+
+
+class Message(BaseModel):
+    text: str
+
+
 class StartJob(BaseModel):
     kind: Literal["triage", "fix"]
 
@@ -151,6 +160,16 @@ def create_app(
             cache["at"] = time.time()
         return cache["tickets"]
 
+    def pending_approvals(run_id: int | None = None) -> list[dict]:
+        sql = (
+            "SELECT a.id, a.run_id, a.kind, a.title, a.detail, a.created_at, r.ticket_id, r.ticket_title, r.kind AS run_kind "
+            "FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.status = 'pending'"
+        )
+        rows = db.query(sql + (" AND a.run_id = ?" if run_id else "") + " ORDER BY a.id", (run_id,) if run_id else ())
+        for r in rows:
+            r["detail"] = json.loads(r["detail"]) if r["detail"] else {}
+        return rows
+
     def run_row(r: dict) -> dict:
         r = dict(r)
         r["cancel_requested"] = bool(r["cancel_requested"])
@@ -185,6 +204,7 @@ def create_app(
             "inbox": inbox,
             "repo": {k: v for k, v in repo_state(cfg).items() if k in {"branch", "clean", "on_agent_branch"}},
             "control": engine.state(),
+            "approvals": pending_approvals(),
         }
 
     @app.get("/api/tickets", dependencies=[Depends(require_session)])
@@ -232,7 +252,9 @@ def create_app(
         row = db.one("SELECT * FROM runs WHERE id = ?", (run_id,))
         if not row:
             raise HTTPException(404, "run non trovato")
-        return {"run": run_row(row), "events": events_for(run_id)}
+        control = engine.controls.get(run_id)
+        interactive = {"live": control is not None, "state": control.state if control else None, "approvals": pending_approvals(run_id)}
+        return {"run": run_row(row), "events": events_for(run_id), "interactive": interactive}
 
     @app.get("/api/runs/{run_id}/stream", dependencies=[Depends(require_session)])
     async def run_stream(run_id: int, request: Request):
@@ -286,6 +308,42 @@ def create_app(
         if row["status"] != "running":
             raise HTTPException(409, "il run è già terminato")
         engine.stop(run_id)
+        return {"ok": True}
+
+    def live_control(run_id: int):
+        control = engine.controls.get(run_id)
+        if control is None:
+            raise HTTPException(409, "questo run non è interattivo (è terminato o è partito da terminale)")
+        return control
+
+    @app.post("/api/runs/{run_id}/message", dependencies=[Depends(require_session)])
+    async def message_run(run_id: int, body: Message):
+        text = body.text.strip()
+        if not text:
+            raise HTTPException(422, "il messaggio è vuoto")
+        await live_control(run_id).send(text)
+        row = db.one("SELECT ticket_id FROM runs WHERE id = ?", (run_id,))
+        db.audit("user", "message", row["ticket_id"], text[:200])
+        return {"ok": True}
+
+    @app.post("/api/runs/{run_id}/pause", dependencies=[Depends(require_session)])
+    async def pause_run(run_id: int):
+        await live_control(run_id).pause()
+        return {"ok": True}
+
+    @app.get("/api/approvals", dependencies=[Depends(require_session)])
+    def list_approvals():
+        return {"approvals": pending_approvals()}
+
+    @app.post("/api/approvals/{approval_id}", dependencies=[Depends(require_session)])
+    def decide_approval(approval_id: int, body: Decision):
+        row = db.one("SELECT a.run_id, a.status, r.ticket_id FROM approvals a JOIN runs r ON r.id = a.run_id WHERE a.id = ?", (approval_id,))
+        if not row:
+            raise HTTPException(404, "richiesta non trovata")
+        control = engine.controls.get(row["run_id"])
+        if row["status"] != "pending" or control is None or not control.decide(approval_id, body.decision, body.note):
+            raise HTTPException(409, "la richiesta non è più in attesa")
+        db.audit("user", "approval", row["ticket_id"], body.decision)
         return {"ok": True}
 
     @app.post("/api/tickets/{ticket_id}/start", dependencies=[Depends(require_session)])

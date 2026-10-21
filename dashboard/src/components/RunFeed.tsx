@@ -36,9 +36,24 @@ export function RunFeed({ runId, className }: { runId: number; className?: strin
       >
         {lines.length === 0 && <p className="text-muted-foreground">In attesa dei primi eventi…</p>}
         {lines.map((e) => (
-          <div key={e.id} className={cn("flex gap-3", e.type === "error" && "text-destructive", e.type === "cancelled" && "text-lamp-amber")}>
+          <div
+            key={e.id}
+            className={cn(
+              "flex gap-3",
+              e.type === "error" && "text-destructive",
+              (e.type === "cancelled" || e.type === "paused" || e.type === "permission" || e.type === "checkpoint") && "text-lamp-amber",
+              e.type === "user" && "my-1 rounded-sm border-l-2 border-primary bg-accent/50 py-1 pl-2 font-sans text-[13px]",
+              e.type === "agent" && "my-1 font-sans text-[13px] italic",
+              e.type === "decision" && "text-muted-foreground",
+            )}
+          >
             <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">{offset(e.ts, t0)}</span>
-            <span className="min-w-0 whitespace-pre-wrap break-words">{e.text.replace(/^\[\d+:\d+\]\s*/, "")}</span>
+            <span className="min-w-0 whitespace-pre-wrap break-words">
+              {e.type === "user" && <strong className="mr-1 not-italic">Tu:</strong>}
+              {e.type === "permission" && "Chiede il permesso: "}
+              {e.type === "checkpoint" && "Aspetta la tua approvazione: "}
+              {e.text.replace(/^\[\d+:\d+\]\s*/, "")}
+            </span>
           </div>
         ))}
         {!ended && lines.length > 0 && <div className="pl-[52px] text-muted-foreground">▍</div>}

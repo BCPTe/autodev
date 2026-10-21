@@ -70,6 +70,7 @@ def mark_orphans(db: Database) -> int:
             (now(), "il processo è terminato senza chiudere il run", run_id),
         )
         add_event(db, run_id, "error", "il processo è terminato senza chiudere il run")
+    db.execute("UPDATE approvals SET status = 'expired', decided_at = ? WHERE status = 'pending' AND run_id IN (SELECT id FROM runs WHERE status != 'running')", (now(),))
     return len(stale)
 
 
@@ -93,7 +94,7 @@ async def run_tracked(
     summarize: Callable[[T], RunSummary],
     daily_cap_usd: float,
     echo: Report | None = None,
-    launched: Callable[[], None] | None = None,
+    launched: Callable[[int], None] | None = None,
 ) -> T:
     spent = spent_today(db)
     cap = daily_cap(db, daily_cap_usd)
@@ -106,7 +107,7 @@ async def run_tracked(
     )
     add_event(db, run_id, "started", f"{kind} avviato")
     if launched:
-        launched()
+        launched(run_id)
 
     def report(line: str) -> None:
         add_event(db, run_id, "log", line)

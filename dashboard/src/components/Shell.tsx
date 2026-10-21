@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom"
+import { Link, NavLink, Outlet } from "react-router-dom"
 import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, LayoutDashboard, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -41,10 +41,18 @@ function Budget() {
 function Agents() {
   const { data } = useOverview()
   const n = data?.running.length ?? 0
+  const asks = data?.approvals.length ?? 0
   return (
-    <span className="flex items-center gap-2 text-sm">
-      <Lamp kind={n ? "violet" : "idle"} live={n > 0} />
-      {n ? `${n} ${n === 1 ? "agente al lavoro" : "agenti al lavoro"}` : "Nessun agente al lavoro"}
+    <span className="flex items-center gap-3 text-sm">
+      <span className="flex items-center gap-2">
+        <Lamp kind={n ? "violet" : "idle"} live={n > 0} />
+        {n ? `${n} ${n === 1 ? "agente al lavoro" : "agenti al lavoro"}` : "Nessun agente al lavoro"}
+      </span>
+      {asks > 0 && (
+        <Link to="/" className="rounded-sm bg-lamp-amber/25 px-2 py-0.5 text-[13px] font-medium">
+          {asks} {asks === 1 ? "richiesta in attesa" : "richieste in attesa"}
+        </Link>
+      )}
     </span>
   )
 }

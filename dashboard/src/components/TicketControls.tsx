@@ -130,6 +130,8 @@ const ACTION_LABEL: Record<string, string> = {
   edit: "ha modificato il ticket",
   comment: "ha commentato",
   stop: "ha fermato un agente",
+  message: "ha scritto all'agente",
+  approval: "ha risposto a una richiesta dell'agente",
 }
 
 export function History({ actions }: { actions: TicketAction[] }) {
