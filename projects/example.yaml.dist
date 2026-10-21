@@ -1,0 +1,74 @@
+# Template: copy to projects/<name>.yaml (the .dist file is ignored by autodev) and fill in. Every key is explained in docs/CONFIG.md.
+name: My project
+language: English                     # language of the agents' analysis and notes
+repo: git@github.com:owner/repo.git   # git remote get-url origin
+base_branch: main                     # branch PRs target
+local_path: /home/me/repos/repo       # absolute path of your checkout
+workspace_mode: inplace               # inplace = the agent works in local_path on its own branch
+
+tracker:
+  type: notion
+  database_id: "00000000000000000000000000000000"     # 32 hex chars in the database URL
+  data_source_id: 00000000-0000-0000-0000-000000000000   # data_sources[0].id from the Notion API
+  status_map:                         # must match the options of the Notion Status column exactly
+    new: "New"
+    needs_info: "Needs info"
+    analyzed: "Analysed"
+    in_progress: "In progress"
+    review: "In review"
+    escalated: "Needs a human"
+    closed: "Closed"
+  # properties:                       # only if your columns are not named as in the README
+  #   title: Name
+
+area_map: example.area_map.md         # which files belong to each Notion Area (create it)
+python: /home/me/repos/repo/.venv/bin/python   # interpreter used for {python} below
+min_body_chars: 40
+
+agents:
+  triage:
+    models: [claude-haiku-5-5, claude-sonnet-5-5]   # cheapest first
+    max_turns: 15
+  fix:
+    models: [claude-sonnet-5-5, claude-opus-5-5]
+    max_turns: 40
+    allowed_bash:                     # runs without asking; run from the repo root
+      - "{python} -m pytest"
+      - "git status"
+      - "git diff"
+      - "git log"
+    commands: |
+      Run everything from the repository root; never use `cd`.
+      Tests: {python} -m pytest -q <paths>
+      Inspect changes: git status, git diff, git log
+    # instructions: |                 # extra project rules for the agent
+
+checks:                               # run after every fix and from the Repo page
+  - name: tests
+    cmd: "{python} -m pytest -q -p no:cacheprovider"
+regressions:                          # new tests must fail without the fix and pass with it
+  - test_globs: ["tests/*.py"]
+    cmd: "{python} -m pytest -q -p no:cacheprovider {tests}"
+
+risk:
+  never_automerge:                    # sensitive files: changes here are rated high risk
+    - app/billing.py
+    - migrations/**
+limits:
+  max_attempts: 3
+  max_fix_runs: 3
+  max_files: 10
+  budget_usd_per_ticket: 5
+  daily_budget_usd: 20
+
+pr:
+  create: false                       # true: push and open a PR after a verified fix
+  slug: owner/repo                    # github.com/owner/repo
+model_choices:                        # names must equal the options of the Notion Model column
+  Haiku: claude-haiku-5-5
+  Sonnet: claude-sonnet-5-5
+  Opus: claude-opus-5-5
+
+autonomy:
+  default_mode: manual                # manual | supervised | auto | paused
+  # quiet_hours: "22:00-07:00"
