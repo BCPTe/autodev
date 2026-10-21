@@ -20,6 +20,11 @@ def _tail(text: str, lines: int = 40) -> str:
     return "\n".join(text.strip().splitlines()[-lines:])
 
 
+def run_check(cfg: ProjectConfig, check, path) -> CheckResult:
+    r = sh(expand(check.cmd, cfg), path / check.cwd)
+    return CheckResult(check.name, r.returncode == 0, _tail(r.stdout + r.stderr))
+
+
 def run_checks(cfg: ProjectConfig, ws: Workspace) -> list[CheckResult]:
     changed = ws.changed_files(ws.base_ref)
     results = []

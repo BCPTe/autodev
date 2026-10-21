@@ -16,7 +16,9 @@ from autodev.jobs import daily_cap, mark_orphans, spent_today, start_of_today
 from autodev.models import Comment, Status, Ticket
 from autodev.server import auth as authmod
 from autodev.server.auth import COOKIE, Auth
-from autodev.server.repo import repo_state
+from autodev import github
+from autodev.server import repo as repomod
+from autodev.server.repo import RepoError, repo_state
 
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "testserver"}
 INBOX_STATES = {Status.NEEDS_INFO, Status.ANALYZED, Status.REVIEW, Status.ESCALATED}
@@ -46,6 +48,21 @@ class TicketEdit(BaseModel):
     authorized: bool | None = None
     model: str | None = None
     attempts: int | None = None
+
+
+class Checkout(BaseModel):
+    branch: str
+
+
+class Cleanup(BaseModel):
+    names: list[str] | None = None
+    remote: bool = False
+
+
+class Merge(BaseModel):
+    confirm: bool = False
+    method: Literal["squash", "merge", "rebase"] = "squash"
+    delete_branch: bool = True
 
 
 class Decision(BaseModel):
@@ -91,7 +108,7 @@ def create_app(
     auth = Auth(db)
     app.state.auth = auth
     app.state.engine = engine
-    cache: dict[str, Any] = {"at": 0.0, "tickets": []}
+    cache: dict[str, Any] = {"at": 0.0, "tickets": [], "prs_at": 0.0, "prs": []}
     engine.on_change = lambda: cache.update(at=0.0)
     mark_orphans(db)
 
@@ -404,10 +421,115 @@ def create_app(
             "by_ticket": db.query("SELECT ticket_id, ticket_title AS title, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs GROUP BY ticket_id ORDER BY cost DESC LIMIT 10"),
         }
 
+    async def pulls(refresh: bool = False) -> list[dict]:
+        if not cfg.pr.slug:
+            return []
+        if refresh or time.time() - cache["prs_at"] > 30:
+            try:
+                cache["prs"] = await github.list_pulls(cfg, cfg.branch_prefix)
+            except Exception as e:
+                raise HTTPException(502, f"GitHub non raggiungibile: {e}")
+            cache["prs_at"] = time.time()
+        return cache["prs"]
+
+    async def merged_heads() -> set[str]:
+        try:
+            return {p["branch"] for p in await pulls() if p["state"] == "merged"}
+        except HTTPException:
+            return set()
+
+    @app.get("/api/prs", dependencies=[Depends(require_session)])
+    async def list_prs(refresh: bool = False):
+        prs = await pulls(refresh)
+        by_url = {t.pr_url: t for t in await tickets() if t.pr_url}
+        out = []
+        for p in prs:
+            t = by_url.get(p["url"])
+            out.append({**p, "ticket": t.model_dump(include={"id", "title", "risk", "verification", "agent_note", "status"}) if t else None})
+        return {"enabled": True, "prs": out}
+
+    @app.post("/api/prs/{number}/merge", dependencies=[Depends(require_session)])
+    async def merge_pr(number: int, body: Merge):
+        if not body.confirm:
+            raise HTTPException(422, "serve la conferma esplicita")
+        pr = next((p for p in await pulls(True) if p["number"] == number), None)
+        if not pr or pr["state"] != "open":
+            raise HTTPException(409, "la pull request non è aperta")
+        if pr["draft"]:
+            raise HTTPException(409, "la pull request è una bozza")
+        if pr["checks"] and pr["checks"]["verdict"] in ("failing", "pending"):
+            raise HTTPException(409, "i controlli su GitHub non sono passati: aspetta o correggi")
+        if pr["mergeable"] is False:
+            raise HTTPException(409, "ci sono conflitti con il branch di base")
+        ticket = next((t for t in await tickets() if t.pr_url == pr["url"]), None)
+        if ticket and ticket.risk == "Alto":
+            raise HTTPException(403, "rischio Alto: unisci a mano su GitHub dopo averla letta")
+        try:
+            await github.merge_pull(cfg, number, body.method)
+            if body.delete_branch:
+                await github.delete_remote_branch(cfg, pr["branch"])
+        except Exception as e:
+            raise HTTPException(502, f"GitHub ha rifiutato il merge: {e}")
+        if ticket:
+            await tracker.set_status(ticket.id, Status.CLOSED)
+        db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
+        cache["prs_at"] = 0.0
+        cache["at"] = 0.0
+        return {"ok": True}
+
+    def checkout_guard() -> None:
+        if engine.busy():
+            raise HTTPException(409, "un agente sta lavorando sul checkout")
+
+    @app.get("/api/repo/diff", dependencies=[Depends(require_session)])
+    async def repo_diff(branch: str | None = None):
+        try:
+            return await asyncio.to_thread(repomod.diff, cfg, branch)
+        except RepoError as e:
+            raise HTTPException(404, str(e))
+
+    @app.post("/api/repo/checkout", dependencies=[Depends(require_session)])
+    async def repo_checkout(body: Checkout):
+        checkout_guard()
+        try:
+            await asyncio.to_thread(repomod.checkout, cfg, body.branch)
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        db.audit("user", "checkout", None, body.branch)
+        return {"ok": True}
+
+    @app.post("/api/repo/cleanup", dependencies=[Depends(require_session)])
+    async def repo_cleanup(body: Cleanup):
+        checkout_guard()
+        pr_merged = await merged_heads()
+        names = body.names if body.names is not None else await asyncio.to_thread(repomod.removable_branches, cfg, pr_merged)
+        try:
+            deleted = await asyncio.to_thread(repomod.delete_branches, cfg, names, pr_merged)
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        remote_deleted = []
+        if body.remote:
+            for name in deleted:
+                try:
+                    if await github.delete_remote_branch(cfg, name):
+                        remote_deleted.append(name)
+                except Exception:
+                    pass
+        db.audit("user", "cleanup", None, ", ".join(deleted))
+        return {"deleted": deleted, "remote_deleted": remote_deleted}
+
+    @app.post("/api/repo/checks", dependencies=[Depends(require_session)])
+    async def repo_checks():
+        try:
+            await engine.start_checks()
+        except Refused as e:
+            raise HTTPException(409, str(e))
+        return {"ok": True}
+
     @app.get("/api/repo", dependencies=[Depends(require_session)])
     async def repo():
-        state = await asyncio.to_thread(repo_state, cfg)
-        state["busy"] = bool(db.one("SELECT id FROM runs WHERE status = 'running' AND kind = 'fix'"))
+        state = await asyncio.to_thread(repo_state, cfg, await merged_heads())
+        state["busy"] = engine.busy()
         return state
 
     @app.get("/api/config", dependencies=[Depends(require_session)])
@@ -422,6 +544,7 @@ def create_app(
             "agents": {k: v.model_dump(include={"models", "max_turns"}) for k, v in cfg.agents.items()},
             "model_choices": cfg.model_choices,
             "pr_enabled": cfg.pr.create,
+            "has_checks": bool(cfg.checks),
             "never_automerge": cfg.risk.never_automerge,
             "daily_cap_effective": daily_cap(db, cfg.limits.daily_budget_usd),
             "autonomy": cfg.autonomy.model_dump(),

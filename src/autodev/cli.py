@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -122,6 +123,35 @@ async def fix(project: str) -> int:
     return 0
 
 
+async def cleanup(project: str, remote: bool, dry_run: bool, workspaces: bool) -> int:
+    """Deletes agent branches already merged into the base branch (git or a merged pull request)."""
+    import shutil
+
+    from autodev import github
+    from autodev.sandbox.workspace import WORKSPACES
+    from autodev.server import repo
+
+    cfg = load_project(f"projects/{project}.yaml")
+    subprocess.run(["git", "fetch", "--prune", "--quiet", "origin"], cwd=cfg.local_path, check=False)
+    pr_merged: set[str] = set()
+    try:
+        pr_merged = {p["branch"] for p in await github.list_pulls(cfg, cfg.branch_prefix) if p["state"] == "merged"}
+    except Exception as e:
+        print(f"Pull request non lette ({e}): uso solo lo stato di git (i merge 'squash' non risultano)")
+    names = repo.removable_branches(cfg, pr_merged)
+    print("\n".join(f"{'[dry-run] ' if dry_run else ''}elimina {n}" for n in names) or "Nessun branch da eliminare.")
+    if not dry_run:
+        for n in repo.delete_branches(cfg, names, pr_merged):
+            if remote and await github.delete_remote_branch(cfg, n):
+                print(f"  rimosso anche su GitHub: {n}")
+    if workspaces and WORKSPACES.is_dir():
+        for d in sorted(p for p in WORKSPACES.iterdir() if p.is_dir()):
+            print(f"{'[dry-run] ' if dry_run else ''}rimuove il clone {d.name}")
+            if not dry_run:
+                shutil.rmtree(d)
+    return 0
+
+
 def serve(project: str, port: int) -> int:
     import uvicorn
 
@@ -159,6 +189,11 @@ def main() -> None:
     t.add_argument("--project", default=None)
     f = sub.add_parser("fix", help="fix all approved tickets (status In lavorazione)")
     f.add_argument("--project", default=None)
+    cl = sub.add_parser("cleanup", help="delete merged agent branches")
+    cl.add_argument("--project", default=None)
+    cl.add_argument("--remote", action="store_true", help="also delete them on GitHub")
+    cl.add_argument("--dry-run", action="store_true")
+    cl.add_argument("--workspaces", action="store_true", help="also remove leftover clones in workspaces/")
     sv = sub.add_parser("serve", help="start the local dashboard")
     sv.add_argument("--project", default=None)
     sv.add_argument("--port", type=int, default=8765)
@@ -166,6 +201,8 @@ def main() -> None:
     args.project = args.project or default_project()
     if args.cmd == "check":
         sys.exit(asyncio.run(check(args.project)))
+    if args.cmd == "cleanup":
+        sys.exit(asyncio.run(cleanup(args.project, args.remote, args.dry_run, args.workspaces)))
     if args.cmd == "serve":
         sys.exit(serve(args.project, args.port))
     if args.cmd == "fix":

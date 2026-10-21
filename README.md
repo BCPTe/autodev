@@ -55,6 +55,12 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
 - Finished runs cannot be resumed with a chat yet.
 
+### Repo and pull requests
+
+- **Repo:** the checkout's state, the agent branches with a file-by-file diff, "Prova" (switch to a branch to test it with Docker), "Torna a <base>", and **Esegui i controlli** (the project's `checks` as a tracked run). Switching branches and deleting are refused while an agent works or when the tree is dirty.
+- **Pull request:** autodev's PRs with GitHub check status, the ticket's risk and verification, and the PR description with the evidence. **Unisci** (squash) needs a second click and is refused for drafts, failing or pending checks, conflicts and Alto risk; a merge closes the ticket and deletes the remote branch.
+- Branches whose PR was merged (even squashed) count as merged. `uv run autodev cleanup [--dry-run] [--remote] [--workspaces]` deletes them from the terminal; unmerged branches are never removed.
+
 ## Layout
 
 ```

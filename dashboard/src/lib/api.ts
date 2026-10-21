@@ -94,7 +94,7 @@ export interface Run {
   project: string
   ticket_id: string
   ticket_title: string
-  kind: "triage" | "fix"
+  kind: "triage" | "fix" | "checks"
   status: "running" | "done" | "failed" | "cancelled"
   model: string | null
   started_at: number
@@ -131,7 +131,7 @@ export interface Approval {
   created_at: number
   ticket_id: string
   ticket_title: string
-  run_kind: "triage" | "fix"
+  run_kind: "triage" | "fix" | "checks"
 }
 
 export interface Interactive {
@@ -179,6 +179,29 @@ export interface RepoState {
   commits: { sha: string; subject: string }[]
 }
 
+export interface Pr {
+  number: number
+  title: string
+  url: string
+  branch: string
+  state: "open" | "closed" | "merged"
+  draft: boolean
+  body: string
+  updated_at: string
+  author: string
+  checks: { verdict: "none" | "passing" | "failing" | "pending"; total: number; failed: number; pending: number } | null
+  mergeable: boolean | null
+  ticket: Pick<Ticket, "id" | "title" | "risk" | "verification" | "agent_note" | "status"> | null
+}
+
+export interface DiffFile {
+  path: string
+  additions: number | null
+  deletions: number | null
+  patch: string
+  truncated: boolean
+}
+
 export interface Config {
   project: string
   repo: string
@@ -189,6 +212,7 @@ export interface Config {
   agents: Record<string, { models: string[]; max_turns: number }>
   model_choices: Record<string, string>
   pr_enabled: boolean
+  has_checks: boolean
   never_automerge: string[]
   daily_cap_effective: number
   autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[]; checkpoints: ("after_agent" | "before_pr")[] }

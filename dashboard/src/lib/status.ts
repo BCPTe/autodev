@@ -26,4 +26,4 @@ export const OFF_TRACK: TicketState[] = ["needs_info", "escalated"]
 
 export const RUN_LAMP: Record<Run["status"], Lamp> = { running: "violet", done: "green", failed: "red", cancelled: "amber" }
 export const RUN_LABEL: Record<Run["status"], string> = { running: "In corso", done: "Finito", failed: "Fallito", cancelled: "Interrotto" }
-export const KIND_LABEL: Record<Run["kind"], string> = { triage: "Triage", fix: "Fix" }
+export const KIND_LABEL: Record<Run["kind"], string> = { triage: "Triage", fix: "Fix", checks: "Controlli" }

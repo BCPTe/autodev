@@ -22,6 +22,8 @@ from autodev.engine import Engine  # noqa: E402
 from autodev.models import Comment, Status, Ticket  # noqa: E402
 from autodev.server.app import create_app  # noqa: E402
 from tests.fixture_repo import make_project  # noqa: E402
+from tests.test_repo_ops import agent_branch, git  # noqa: E402
+from autodev import github  # noqa: E402
 
 NOW = time.time()
 MIN = 60
@@ -36,7 +38,7 @@ def tickets() -> list[Ticket]:
         t(2, "Firma del direttore obbligatoria solo se il progettista ha il nome", Status.ANALYZED, area="Autofill", risk="Medio", cost_usd=0.16),
         t(3, "Telefono o cellulare del progettista: basta uno", Status.ANALYZED, area="Autofill", risk="Basso", cost_usd=0.12),
         t(4, "Required and dependency fields logic", Status.IN_PROGRESS, area="Autofill", risk="Medio", model="Auto", attempts=1, cost_usd=3.56),
-        t(5, "Il wizard perde i dati al ricarico dello step 4", Status.REVIEW, area="Wizard", risk="Basso", attempts=1, cost_usd=1.4, branch="autodev/wizard-perde-dati-a1b2c3", verification="Passata"),
+        t(5, "Il wizard perde i dati al ricarico dello step 4", Status.REVIEW, area="Wizard", risk="Basso", attempts=1, cost_usd=1.4, branch="autodev/wizard-perde-dati-a1b2c3", verification="Passata", pr_url="https://github.com/o/r/pull/12"),
         t(6, "Esporta ZIP vuoto con documenti secondari", Status.NEEDS_INFO, area="Export PDF", cost_usd=0.62),
         t(7, "Billing: il piano non si aggiorna dopo il pagamento", Status.ESCALATED, area="Billing", risk="Alto", attempts=3, cost_usd=5.9, agent_note="tetto di spesa per ticket raggiunto ($5.90 su $6.00)"),
         t(8, "Rubrica: duplicati dopo l'import", Status.CLOSED, area="Rubrica", cost_usd=0.9, verification="Passata"),
@@ -155,6 +157,29 @@ def main() -> None:
     cfg = make_project(Path(tempfile.mkdtemp(prefix="autodev-demo-")))
     live = seed(db)
     fake_agents()
+    cfg.pr.slug = "o/r"
+    git(cfg.local_path, "fetch", "-q")
+    agent_branch(cfg, "autodev/wizard-perde-dati-a1b2c3", "def apply_discount(price, percent):\n    return price * (1 - percent / 100)\n")
+    agent_branch(cfg, "autodev/rubrica-duplicati-ff00aa", "RUBRICA = True\n", merge=True)
+
+    def pr(n, branch, title, state="open", verdict="passing", body=""):
+        return {"number": n, "title": title, "url": f"https://github.com/o/r/pull/{n}", "branch": branch, "state": state, "draft": False, "body": body,
+                "updated_at": "2026-10-21T09:30:00Z", "author": "bot", "mergeable": True,
+                "checks": {"verdict": verdict, "total": 3, "failed": 0, "pending": 0} if state == "open" else None}
+
+    async def list_pulls(cfg, prefix, limit=30):
+        return [
+            pr(12, "autodev/wizard-perde-dati-a1b2c3", "fix: Il wizard perde i dati al ricarico dello step 4", body="## Verifiche\n- PASS  regression test\n- PASS  backend tests\n\n## Rischio: Basso"),
+            pr(9, "autodev/rubrica-duplicati-ff00aa", "fix: Rubrica: duplicati dopo l'import", state="merged"),
+        ]
+
+    async def merge_pull(cfg, number, method="squash"):
+        return "sha"
+
+    async def delete_remote_branch(cfg, branch):
+        return True
+
+    github.list_pulls, github.merge_pull, github.delete_remote_branch = list_pulls, merge_pull, delete_remote_branch
     tracker = FakeTracker()
     app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker))
     print(f"SETUP_CODE={app.state.auth.setup_code}", flush=True)

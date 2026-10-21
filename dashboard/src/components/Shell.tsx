@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router-dom"
-import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, LayoutDashboard, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
+import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { ModeSwitch, MyTurn, Notice, StopAll } from "@/components/ControlBar"
@@ -16,6 +16,7 @@ const NAV = [
   { to: "/tickets", label: "Ticket", icon: Ticket },
   { to: "/runs", label: "Esecuzioni", icon: Activity },
   { to: "/repo", label: "Repo", icon: GitBranch },
+  { to: "/prs", label: "Pull request", icon: GitPullRequest },
   { to: "/costs", label: "Costi", icon: CircleDollarSign },
   { to: "/settings", label: "Impostazioni", icon: Settings },
 ]

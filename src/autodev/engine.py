@@ -9,8 +9,10 @@ Autonomy (the `mode` setting, changeable from the dashboard):
 """
 import asyncio
 import time
+from pathlib import Path
 from typing import Callable
 
+from autodev.checks import run_check
 from autodev.config import ProjectConfig
 from autodev.control import RunControl, current_control
 from autodev.db import Database
@@ -51,6 +53,24 @@ def fix_job(cfg: ProjectConfig, tracker, ticket: Ticket):
             branch=o.branch, pr_url=o.pr_url,
             result_text="\n".join([*(c.line() for c in o.checks), o.message]).strip() or None,
         )
+
+    return work, summarize
+
+
+def checks_job(cfg: ProjectConfig, tracker, ticket: Ticket):
+    async def work(report: Report):
+        results = []
+        for check in cfg.checks:
+            report(f"esegue {check.name}...")
+            result = await asyncio.to_thread(run_check, cfg, check, Path(cfg.local_path))
+            report(result.line())
+            results.append(result)
+        return results
+
+    def summarize(results) -> RunSummary:
+        ok = all(r.ok for r in results)
+        text = "\n".join(r.line() + ("" if r.ok else "\n" + r.output) for r in results)
+        return RunSummary(outcome="passed" if ok else "failed", result_text=text)
 
     return work, summarize
 
@@ -140,10 +160,10 @@ class Engine:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    def _check_can_start(self, actor: str) -> None:
+    def _check_can_start(self, actor: str, *, respect_my_turn: bool = True) -> None:
         if self.mode == "paused":
             raise Refused("la modalità è 'In pausa': riattivala per far partire un agente")
-        if self.my_turn:
+        if self.my_turn and respect_my_turn:
             raise Refused("è il tuo turno: finché non lo restituisci nessun agente parte")
         if self.busy():
             raise Refused("un agente è già al lavoro: ne gira uno alla volta sul checkout")
@@ -151,10 +171,22 @@ class Engine:
         if spent >= cap:
             raise Refused(f"tetto giornaliero raggiunto (${spent:.2f} su ${cap:.2f}): alzalo nelle impostazioni")
 
+    async def start_checks(self, actor: str = "user") -> None:
+        """Runs the project's configured checks (tests, typecheck) on the checkout as it is now."""
+        if not self.cfg.checks:
+            raise Refused("nessun controllo configurato in `checks` nel file del progetto")
+        self._check_can_start(actor, respect_my_turn=False)
+        self._launching = True
+        self.db.audit(actor, "start_checks", None, "")
+        task = asyncio.ensure_future(self._execute(Ticket(id="repo", title="Controlli sul checkout", status=Status.NEW), "checks"))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
     async def _execute(self, ticket: Ticket, kind: str) -> None:
-        job = triage_job if kind == "triage" else fix_job
+        job = {"triage": triage_job, "fix": fix_job, "checks": checks_job}[kind]
         work, summarize = job(self.cfg, self.tracker, ticket)
-        self._tried[(ticket.id, ticket.status.value)] = self._clock()
+        if kind != "checks":
+            self._tried[(ticket.id, ticket.status.value)] = self._clock()
         control = RunControl(self.db, lambda: self.mode)
         current_control.set(control)
         try:

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { api, type Comment, type Interactive, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
+import { api, type Comment, type DiffFile, type Pr, type Interactive, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
 
 export const useOverview = () =>
   useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 5000 })
@@ -31,3 +31,13 @@ export const useCosts = () =>
   useQuery({ queryKey: ["costs"], queryFn: () => api<Costs>("/api/costs"), refetchInterval: 15000 })
 
 export const useConfig = () => useQuery({ queryKey: ["config"], queryFn: () => api<Config>("/api/config") })
+
+export const usePrs = () =>
+  useQuery({ queryKey: ["prs"], queryFn: () => api<{ enabled: boolean; prs: Pr[] }>("/api/prs"), refetchInterval: 30000, retry: 0 })
+
+export const useDiff = (branch: string | null, open: boolean) =>
+  useQuery({
+    queryKey: ["diff", branch],
+    enabled: open,
+    queryFn: () => api<{ files: DiffFile[] }>(`/api/repo/diff${branch ? `?branch=${encodeURIComponent(branch)}` : ""}`),
+  })

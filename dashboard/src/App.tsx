@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/lib/theme"
 import { Costs } from "@/pages/Costs"
 import { Login } from "@/pages/Login"
 import { Now } from "@/pages/Now"
+import { Prs } from "@/pages/Prs"
 import { Repo } from "@/pages/Repo"
 import { RunDetail } from "@/pages/RunDetail"
 import { Runs } from "@/pages/Runs"
@@ -49,6 +50,7 @@ function Gate() {
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<RunDetail />} />
           <Route path="repo" element={<Repo />} />
+          <Route path="prs" element={<Prs />} />
           <Route path="costs" element={<Costs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
