@@ -60,8 +60,8 @@ async def test_fetch_ready_parses_ticket_and_body():
             200,
             json={
                 "results": [
-                    {"created_by": {"type": "bot"}, "rich_text": [{"plain_text": "Triage: needs_info"}]},
-                    {"created_by": {"type": "person"}, "rich_text": [{"plain_text": "Solo la SCIA SUE"}]},
+                    {"created_by": {"object": "user", "id": "b"}, "display_name": {"type": "integration", "resolved_name": "autodev"}, "rich_text": [{"plain_text": "Triage: needs_info"}]},
+                    {"created_by": {"object": "user", "id": "p"}, "display_name": {"type": "user", "resolved_name": "Christian"}, "rich_text": [{"plain_text": "Solo la SCIA SUE"}]},
                 ]
             },
         )
@@ -77,3 +77,24 @@ async def test_fetch_ready_parses_ticket_and_body():
     assert t.attachments == ["shot.png"]
     assert t.comments == ["Solo la SCIA SUE"]
     assert t.cost_usd == 0.25
+
+
+@respx.mock
+async def test_bot_comments_are_recognised_by_display_name_and_returned_for_the_fix_agent():
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    respx.get(f"{API}/comments").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"created_by": {"object": "user", "id": "b"}, "display_name": {"type": "integration", "resolved_name": "autodev"},
+                     "rich_text": [{"plain_text": "Triage: ready"}], "created_time": "2026-10-21T10:00:00Z"},
+                    {"created_by": {"object": "user", "id": "p"}, "display_name": {"type": "user", "resolved_name": "Christian Gatto"},
+                     "rich_text": [{"plain_text": "ok procedi"}], "created_time": "2026-10-21T10:05:00Z"},
+                ]
+            },
+        )
+    )
+    tracker = NotionTracker(cfg.tracker, token="x")
+    assert await tracker.bot_comments("page-1") == ["Triage: ready"]
+    await tracker.aclose()

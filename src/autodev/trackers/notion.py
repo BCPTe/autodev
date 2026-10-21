@@ -1,7 +1,7 @@
 import httpx
 
 from autodev.config import TrackerConfig
-from autodev.models import Risk, Status, Ticket
+from autodev.models import Comment, Risk, Status, Ticket
 
 API = "https://api.notion.com/v1"
 VERSION = "2025-09-03"
@@ -15,6 +15,15 @@ def _text(prop: dict, key: str) -> str | None:
 def _select(prop: dict) -> str | None:
     sel = prop.get("select")
     return sel["name"] if sel else None
+
+
+def _is_bot(comment: dict) -> bool:
+    """Notion puts no `type` in a comment's created_by; the author kind is in display_name."""
+    return (comment.get("display_name") or {}).get("type") == "integration"
+
+
+def _author(comment: dict) -> str:
+    return (comment.get("display_name") or {}).get("resolved_name") or ("autodev" if _is_bot(comment) else "persona")
 
 
 def _rich(text: str) -> dict:
@@ -49,6 +58,14 @@ class NotionTracker:
             attempts=int(p["Tentativi"]["number"] or 0),
             cost_usd=float(p["Costo (USD)"]["number"] or 0.0),
             model=_select(p.get("Modello") or {}),
+            url=page.get("url"),
+            risk=_select(p.get("Rischio") or {}),
+            branch=_text(p.get("Branch") or {}, "rich_text"),
+            pr_url=(p.get("PR") or {}).get("url"),
+            agent_note=_text(p.get("Note agente") or {}, "rich_text"),
+            verification=_select(p.get("Esito verifica") or {}),
+            created_at=page.get("created_time"),
+            updated_at=page.get("last_edited_time"),
             attachments=[f["name"] for f in p["Allegati"]["files"]],
         )
 
@@ -75,6 +92,45 @@ class NotionTracker:
             t.comments = await self._comments(t.id, bot=False)
         return tickets
 
+    async def list_all(self) -> list[Ticket]:
+        """Every ticket with its properties (no body, no comments): enough for a board."""
+        tickets: list[Ticket] = []
+        cursor: str | None = None
+        while True:
+            payload: dict = {"page_size": 100}
+            if cursor:
+                payload["start_cursor"] = cursor
+            r = await self._client.post(f"/data_sources/{self._cfg.data_source_id}/query", json=payload)
+            r.raise_for_status()
+            data = r.json()
+            for page in data["results"]:
+                try:
+                    tickets.append(self._parse(page))
+                except KeyError:
+                    continue
+            if not data.get("has_more"):
+                return tickets
+            cursor = data["next_cursor"]
+
+    async def detail(self, ticket_id: str) -> tuple[Ticket, list[Comment]]:
+        r = await self._client.get(f"/pages/{ticket_id}")
+        r.raise_for_status()
+        ticket = self._parse(r.json())
+        ticket.body = await self._body(ticket_id)
+        c = await self._client.get("/comments", params={"block_id": ticket_id, "page_size": 100})
+        c.raise_for_status()
+        comments = [
+            Comment(
+                author=_author(x),
+                is_bot=_is_bot(x),
+                text=_text(x, "rich_text") or "",
+                created_at=x.get("created_time"),
+            )
+            for x in c.json()["results"]
+        ]
+        ticket.comments = [c.text for c in comments if not c.is_bot]
+        return ticket, comments
+
     async def fetch_ready(self) -> list[Ticket]:
         return await self.fetch_by_status(Status.NEW)
 
@@ -84,7 +140,7 @@ class NotionTracker:
         return [
             _text(c, "rich_text") or ""
             for c in r.json()["results"]
-            if ((c.get("created_by") or {}).get("type") == "bot") == bot
+            if _is_bot(c) == bot
         ]
 
     async def bot_comments(self, ticket_id: str) -> list[str]:

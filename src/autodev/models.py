@@ -36,3 +36,18 @@ class Ticket(BaseModel):
     body: str = ""
     attachments: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
+    url: str | None = None
+    risk: str | None = None
+    branch: str | None = None
+    pr_url: str | None = None
+    agent_note: str | None = None
+    verification: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class Comment(BaseModel):
+    author: str
+    is_bot: bool = False
+    text: str
+    created_at: str | None = None

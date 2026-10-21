@@ -19,6 +19,7 @@ class Limits(BaseModel):
     max_fix_runs: int = 3
     max_files: int = 10
     budget_usd_per_ticket: float = 5.0
+    daily_budget_usd: float = 20.0
 
 
 class RiskConfig(BaseModel):

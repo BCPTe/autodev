@@ -114,6 +114,7 @@ class FixOutcome:
     cost_usd: float = 0.0
     checks: list[CheckResult] = field(default_factory=list)
     message: str = ""
+    models: list[str] = field(default_factory=list)
 
 
 def _notion_url(ticket_id: str) -> str:
@@ -179,8 +180,11 @@ async def fix_ticket(
     if report:
         where = "checkout di demo" if ws.inplace else ws.path.name
         report(f"workspace: {where} ({'ripreso, ' + str(len(ws.history().splitlines())) + ' righe di storia' if ws.resumed else 'nuovo'}), branch {ws.branch}")
+    models_used: list[str] = []
     try:
-        return await _fix_in_workspace(cfg, tracker, ticket, report, ws)
+        outcome = await _fix_in_workspace(cfg, tracker, ticket, report, ws, models_used)
+        outcome.models = models_used
+        return outcome
     finally:
         _publish_local(cfg, ws, report)
 
@@ -202,7 +206,8 @@ def _publish_local(cfg: ProjectConfig, ws: Workspace, report: Report | None) -> 
 
 
 async def _fix_in_workspace(
-    cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, report: Report | None, ws: Workspace
+    cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, report: Report | None, ws: Workspace,
+    models_used: list[str],
 ) -> FixOutcome:
     triage_notes = await tracker.bot_comments(ticket.id)
     cost = 0.0
@@ -210,7 +215,6 @@ async def _fix_in_workspace(
     fix: FixResult | None = None
     checks: list[CheckResult] = []
 
-    models_used: list[str] = []
     for attempt in range(1, cfg.limits.max_attempts + 1):
         if remaining_budget(cfg, ticket, cost) < MIN_USEFUL_BUDGET:
             await _escalate(tracker, ticket, budget_message(cfg, ticket, cost), cost, ws.branch)

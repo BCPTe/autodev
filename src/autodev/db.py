@@ -1,0 +1,99 @@
+"""Local SQLite store shared by the CLI and the dashboard server.
+
+WAL mode lets the dashboard read while a CLI run is writing, so a run started from the terminal
+shows up live in the dashboard without any other plumbing.
+"""
+import json
+import sqlite3
+import threading
+import time
+from pathlib import Path
+from typing import Any
+
+DEFAULT_PATH = Path(__file__).resolve().parents[2] / "data" / "autodev.db"
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    ticket_id TEXT NOT NULL,
+    ticket_title TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    model TEXT,
+    started_at REAL NOT NULL,
+    finished_at REAL,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    outcome TEXT,
+    branch TEXT,
+    pr_url TEXT,
+    error TEXT,
+    cancel_requested INTEGER NOT NULL DEFAULT 0,
+    pid INTEGER
+);
+CREATE INDEX IF NOT EXISTS runs_ticket ON runs(ticket_id);
+CREATE INDEX IF NOT EXISTS runs_started ON runs(started_at);
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL REFERENCES runs(id),
+    ts REAL NOT NULL,
+    type TEXT NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    data TEXT
+);
+CREATE INDEX IF NOT EXISTS events_run ON events(run_id, id);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL
+);
+"""
+
+
+class Database:
+    def __init__(self, path: str | Path | None = None):
+        self.path = Path(path) if path else DEFAULT_PATH
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._conn = sqlite3.connect(self.path, check_same_thread=False, timeout=30)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")
+        self._conn.executescript(SCHEMA)
+
+    def execute(self, sql: str, params: tuple | dict = ()) -> int:
+        with self._lock:
+            cur = self._conn.execute(sql, params)
+            self._conn.commit()
+            return cur.lastrowid or 0
+
+    def query(self, sql: str, params: tuple | dict = ()) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(r) for r in self._conn.execute(sql, params).fetchall()]
+
+    def one(self, sql: str, params: tuple | dict = ()) -> dict[str, Any] | None:
+        rows = self.query(sql, params)
+        return rows[0] if rows else None
+
+    def close(self) -> None:
+        self._conn.close()
+
+    # settings -----------------------------------------------------------------------------
+    def get_setting(self, key: str, default: str | None = None) -> str | None:
+        row = self.one("SELECT value FROM settings WHERE key = ?", (key,))
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self.execute(
+            "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+
+
+def dumps(data: dict | None) -> str | None:
+    return json.dumps(data, ensure_ascii=False) if data else None
+
+
+def now() -> float:
+    return time.time()

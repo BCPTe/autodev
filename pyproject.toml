@@ -9,6 +9,8 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
     "claude-agent-sdk>=0.2.170",
+    "fastapi>=0.158.2",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]
