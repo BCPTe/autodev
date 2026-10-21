@@ -127,8 +127,11 @@ class NotionTracker:
             for page in data["results"]:
                 try:
                     tickets.append(self._parse(page))
-                except KeyError:
-                    continue
+                except KeyError as e:
+                    raise RuntimeError(
+                        f"cannot read a Notion row: {e} is missing or is not in the project file "
+                        "(check the column names in `tracker.properties` and the labels in `tracker.status_map`)"
+                    ) from e
             if not data.get("has_more"):
                 return tickets
             cursor = data["next_cursor"]

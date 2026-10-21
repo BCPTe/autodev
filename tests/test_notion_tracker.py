@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 import httpx
@@ -138,4 +139,18 @@ async def test_authorized_and_model_are_written_to_their_columns():
     body = patch.calls.last.request.content
     assert b'"Authorized":{"checkbox":true}' in body.replace(b" ", b"")
     assert b'"Model":{"select":{"name":"Opus"}}' in body.replace(b" ", b"")
+    await tracker.aclose()
+
+
+@respx.mock
+async def test_a_status_label_missing_from_the_project_file_is_an_error_not_an_empty_board():
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    page = _page()
+    page["properties"]["Status"] = {"status": {"name": "Nuovo"}}
+    respx.post(f"{API}/data_sources/{cfg.tracker.data_source_id}/query").mock(
+        return_value=httpx.Response(200, json={"results": [page], "has_more": False})
+    )
+    tracker = NotionTracker(cfg.tracker, token="x")
+    with pytest.raises(RuntimeError, match="status_map"):
+        await tracker.list_all()
     await tracker.aclose()
