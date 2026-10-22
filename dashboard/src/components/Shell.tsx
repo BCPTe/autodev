@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
 import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, Lightbulb, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
@@ -81,6 +82,24 @@ function Agents() {
   )
 }
 
+function NextCheck() {
+  const { data } = useOverview()
+  const [now, setNow] = useState(() => Date.now() / 1000)
+  const next = data?.control.next_check ?? null
+  useEffect(() => {
+    if (next === null) return
+    const t = setInterval(() => setNow(Date.now() / 1000), 1000)
+    return () => clearInterval(t)
+  }, [next])
+  if (next === null) return null
+  const left = Math.max(0, Math.ceil(next - now))
+  return (
+    <span className="text-sm text-muted-foreground" title="Time until the next check of the open tickets">
+      Next check {left > 0 ? <span className="tabular-nums text-foreground">{Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</span> : "in progress…"}
+    </span>
+  )
+}
+
 function ProjectSwitch() {
   const { data } = useProjects()
   if (!data || data.projects.length < 2) return null
@@ -145,6 +164,7 @@ export function Shell() {
       <div className="min-w-0">
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-6 gap-y-2 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:px-6">
           <Agents />
+          <NextCheck />
           <Budget />
           <div className="ml-auto flex items-center gap-1">
             <StopAll />

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { PageHeader } from "@/components/PageHeader"
+import { Lamp } from "@/components/Lamp"
 import { StateLabel } from "@/components/StateLabel"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -31,26 +32,26 @@ export function Tickets() {
 
   return (
     <>
-      <PageHeader title="Ticket">{data && `${data.tickets.length} in total`}</PageHeader>
+      <PageHeader title="Tickets">{data && `${data.tickets.length} ${data.tickets.length === 1 ? "ticket" : "tickets"}`}</PageHeader>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title" aria-label="Cerca per titolo" className="w-64" />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by title" aria-label="Search by title" className="w-64" />
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
           {ALL.filter((s) => counts[s]).map((s) => (
             <button
               key={s}
               onClick={() => setState(state === s ? null : s)}
               aria-pressed={state === s}
-              className={cn("rounded-sm border px-2.5 py-1 text-[13px] hover:bg-muted", state === s && "border-primary bg-accent text-accent-foreground")}
+              className={cn("inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-[13px] hover:bg-muted", state === s && "border-primary bg-accent text-accent-foreground")}
             >
-              {STATES[s].label} <span className="tabular-nums text-muted-foreground">{counts[s]}</span>
+              <Lamp kind={STATES[s].lamp} className="size-2" />{STATES[s].label} <span className="tabular-nums text-muted-foreground">{counts[s]}</span>
             </button>
           ))}
         </div>
       </div>
 
       {isLoading && <Skeleton className="h-64 w-full" />}
-      {data && rows.length === 0 && <p className="py-6 text-muted-foreground">No ticket matches the filters.</p>}
+      {data && rows.length === 0 && <p className="py-6 text-muted-foreground">{data.tickets.length === 0 ? "No tickets yet." : "No ticket matches your search or filter."}</p>}
       {rows.length > 0 && (
         <div className="overflow-x-auto rounded-sm border bg-card">
           <Table>

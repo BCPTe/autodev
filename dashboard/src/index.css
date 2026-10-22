@@ -111,9 +111,26 @@
     font-size: 14px;
     line-height: 1.5;
   }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.005em; }
+  h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.005em; text-wrap: balance; }
+  ::selection { background: color-mix(in oklab, var(--primary) 28%, transparent); }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 }
+
+/* Section heading: a station marker on the rail, then the name. */
+.section-title {
+  display: flex; align-items: center; gap: 0.625rem;
+  font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.2;
+  margin-bottom: 0.875rem;
+}
+.section-title::before {
+  content: ""; width: 0.5rem; height: 0.5rem; border-radius: 9999px; flex: none;
+  background: var(--background); box-shadow: 0 0 0 2px var(--primary);
+}
+.section-title::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.page-in { animation: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .page-in { animation: none; } }
 
 @keyframes lamp-pulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lamp-violet) 55%, transparent); }

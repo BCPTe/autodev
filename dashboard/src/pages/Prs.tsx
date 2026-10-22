@@ -15,15 +15,15 @@ const STATE: Record<Pr["state"], { label: string; lamp: LampKind }> = {
   merged: { label: "Merged", lamp: "violet" },
   closed: { label: "Closed", lamp: "idle" },
 }
-const CHECKS = { none: "No checks on GitHub", unknown: "Checks unreadable", passing: "Checks passed", failing: "Checks failed", pending: "Checks running" } as const
+const CHECKS = { none: "No checks on GitHub", unknown: "Checks could not be read", passing: "Checks passed", failing: "Checks failed", pending: "Checks running" } as const
 
 function mergeBlocker(p: Pr): string | null {
-  if (p.draft) return "It is a draft"
-  if (p.checks?.verdict === "failing") return "The checks on GitHub failed"
-  if (p.checks?.verdict === "unknown") return `Checks cannot be read: ${p.checks.reason ?? "check the token permissions"}`
-  if (p.checks?.verdict === "pending") return "The checks on GitHub are still running"
-  if (p.mergeable === false) return "There are conflicts with the base branch"
-  if (p.ticket?.risk === "High") return "High risk: merge it by hand on GitHub after reading it"
+  if (p.draft) return "The pull request is still a draft"
+  if (p.checks?.verdict === "failing") return "GitHub checks failed"
+  if (p.checks?.verdict === "unknown") return `GitHub checks could not be read: ${p.checks.reason ?? "check the token permissions"}`
+  if (p.checks?.verdict === "pending") return "GitHub checks are still running"
+  if (p.mergeable === false) return "It conflicts with the base branch"
+  if (p.ticket?.risk === "High") return "High risk: read it and merge by hand on GitHub"
   return null
 }
 
@@ -57,7 +57,7 @@ function PrRow({ p }: { p: Pr }) {
       {p.body && (
         <div className="ml-5">
           <button className="text-[13px] text-primary underline-offset-4 hover:underline" aria-expanded={open} onClick={() => setOpen(!open)}>
-            {open ? "Hide the description" : "Show the description and the evidence"}
+            {open ? "Hide description" : "Show description and evidence"}
           </button>
           {open && <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap rounded-sm border bg-card p-3 font-sans text-[13px] leading-relaxed">{p.body}</pre>}
         </div>
@@ -75,7 +75,7 @@ function PrRow({ p }: { p: Pr }) {
             <GitMerge /> {armed ? "Confirm: squash and merge" : "Merge"}
           </Button>
         )}
-        {blocker && <span className="text-[13px] font-medium text-foreground">Merge is disabled: {blocker}</span>}
+        {blocker && <span className="text-[13px] font-medium text-foreground">Merge unavailable: {blocker}</span>}
       </div>
     </li>
   )
@@ -85,10 +85,10 @@ export function Prs() {
   const { data, isLoading, error } = usePrs()
   return (
     <>
-      <PageHeader title="Pull request">The ones opened by autodev. Merging always needs your confirmation and is not possible for High risk.</PageHeader>
+      <PageHeader title="Pull requests">Opened by autodev. Merging always asks you to confirm; High-risk pull requests must be merged by hand on GitHub.</PageHeader>
       {isLoading && <Skeleton className="h-48 w-full" />}
       {error && <p role="alert" className="text-destructive">{(error as Error).message}</p>}
-      {data && data.prs.length === 0 && <p className="py-6 text-muted-foreground">No pull requests. They appear when a verified fix is published (<span className="font-mono">pr.create</span> attivo).</p>}
+      {data && data.prs.length === 0 && <p className="py-6 text-muted-foreground">No pull requests yet. One appears here when autodev publishes a verified fix (requires <span className="font-mono">pr.create</span> to be on).</p>}
       {data && <ul className="divide-y border-y">{data.prs.map((p) => <PrRow key={p.number} p={p} />)}</ul>}
     </>
   )

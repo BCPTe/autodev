@@ -46,9 +46,9 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
                   <Lamp kind={list.length ? meta.lamp : "idle"} live={state === "in_progress" && list.length > 0} />
                 </span>
               </div>
-              <div className="mt-2 flex items-baseline gap-2 sm:justify-center">
+              <div className="mt-3 flex items-baseline gap-2.5 sm:justify-center">
                 <h3 className="text-base font-semibold">{meta.label}</h3>
-                <span className="font-display text-xl tabular-nums text-muted-foreground">{list.length}</span>
+                <span className={cn("font-display text-3xl leading-none tabular-nums", list.length ? "text-foreground" : "text-muted-foreground")}>{list.length}</span>
               </div>
               <Chips tickets={list} />
             </div>
@@ -56,7 +56,7 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
         })}
       </div>
 
-      <div className="mt-8 grid gap-4 border-t border-dashed pt-4 sm:grid-cols-2">
+      <div className="mt-10 grid gap-6 border-t border-dashed pt-5 sm:grid-cols-2">
         {OFF_TRACK.map((state) => {
           const list = by(state)
           const meta = STATES[state]
@@ -65,8 +65,8 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
               <div className="flex items-baseline gap-2">
                 <Lamp kind={list.length ? meta.lamp : "idle"} className="translate-y-px" />
                 <h3 className="text-base font-semibold">{meta.label}</h3>
-                <span className="font-display text-xl tabular-nums text-muted-foreground">{list.length}</span>
-                <span className="text-xs text-muted-foreground">fuori dal flusso</span>
+                <span className="font-display text-2xl leading-none tabular-nums text-muted-foreground">{list.length}</span>
+                <span className="text-xs text-muted-foreground">off the main track</span>
               </div>
               <Chips tickets={list} />
             </div>
