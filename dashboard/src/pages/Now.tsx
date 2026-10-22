@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils"
 import { Link, useSearchParams } from "react-router-dom"
 import { PageHeader } from "@/components/PageHeader"
 import { PipelineRail } from "@/components/PipelineRail"
@@ -44,25 +45,25 @@ export function Now() {
 
   return (
     <>
-      <PageHeader title="Overview">{overview?.repo && <span>Repo on <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · uncommitted changes"}</span>}</PageHeader>
+      <PageHeader title="Overview">{overview?.repo && <span>On branch <span className="font-mono">{overview.repo.branch}</span>{overview.repo.clean ? "" : " · uncommitted changes"}</span>}</PageHeader>
 
       {tickets ? <PipelineRail tickets={tickets.tickets} /> : <Skeleton className="h-48 w-full" />}
 
-      <div className="mt-12 grid gap-10 lg:grid-cols-2">
-        <section aria-labelledby="da-te">
-          <h2 id="da-te" className="mb-3 text-xl font-semibold">Da gestire</h2>
+      <div className="mt-14 grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+        <section aria-labelledby="needs-you">
+          <h2 id="needs-you" className="section-title">Needs you</h2>
           {overview && overview.approvals.length > 0 && (
-            <div className="mb-4 space-y-3">{overview.approvals.map((a) => <ApprovalCard key={a.id} a={a} />)}</div>
+            <div className={cn("space-y-3", inbox.length + problems.length > 0 ? "mb-4" : "border-b pb-4")}>{overview.approvals.map((a) => <ApprovalCard key={a.id} a={a} />)}</div>
           )}
-          {overview && inbox.length === 0 && problems.length === 0 && overview.approvals.length === 0 && <p className="text-muted-foreground">Nothing needs you right now.</p>}
-          <ul className="divide-y border-y">
+          {overview && inbox.length === 0 && problems.length === 0 && overview.approvals.length === 0 && <div className="border-y py-3"><p className="text-muted-foreground">Nothing needs you right now.</p></div>}
+          {inbox.length + problems.length > 0 && <ul className="divide-y border-y">
             {problems.map((r) => (
               <li key={`run-${r.id}`} className="flex items-start gap-2 hover:bg-muted/50">
                 <Link to={`/runs/${r.id}`} className="flex min-w-0 flex-1 items-start gap-3 py-3">
                   <Lamp kind={RUN_LAMP[r.status]} className="mt-1.5" />
                   <div className="min-w-0">
                     <p className="truncate font-medium">{KIND_LABEL[r.kind]} {r.status === "failed" ? "failed" : "stopped"}: {r.ticket_title}</p>
-                    <p className="truncate text-[13px] text-muted-foreground">{r.error ?? "Open the run for details"}</p>
+                    <p className="truncate text-[13px] text-muted-foreground">{r.error ?? "No error message. Open the run for details."}</p>
                   </div>
                   <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{ago(r.started_at)}</span>
                 </Link>
@@ -81,17 +82,17 @@ export function Now() {
                 </button>
               </li>
             ))}
-          </ul>
+          </ul>}
         </section>
 
-        <section aria-labelledby="in-esecuzione">
-          <h2 id="in-esecuzione" className="mb-3 text-xl font-semibold">In esecuzione</h2>
+        <section aria-labelledby="running-now">
+          <h2 id="running-now" className="section-title">Running now</h2>
           {overview && overview.running.length === 0 && (
             <div className="border-y py-3">
-              <p className="text-muted-foreground">No agent working.</p>
+              <p className="text-muted-foreground">No agent is running.</p>
               {last && (
                 <p className="mt-1 text-[13px]">
-                  Ultimo run: <Link className="underline underline-offset-4" to={`/runs/${last.id}`}>{KIND_LABEL[last.kind]} su {last.ticket_title}</Link>
+                  Last run: <Link className="underline underline-offset-4" to={`/runs/${last.id}`}>{KIND_LABEL[last.kind]} on {last.ticket_title}</Link>
                   <span className="text-muted-foreground"> · {ago(last.finished_at ?? last.started_at)} · {money(last.cost_usd)}</span>
                 </p>
               )}

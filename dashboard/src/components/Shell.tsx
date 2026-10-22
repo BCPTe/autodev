@@ -1,7 +1,8 @@
-import { Link, NavLink, Outlet } from "react-router-dom"
-import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
+import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ModeSwitch, MyTurn, Notice, StopAll } from "@/components/ControlBar"
 import { Lamp } from "@/components/Lamp"
 import { TicketSheet } from "@/components/TicketSheet"
@@ -14,10 +15,10 @@ import { cn } from "@/lib/utils"
 
 const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
-  { to: "/tickets", label: "Ticket", icon: Ticket },
+  { to: "/tickets", label: "Tickets", icon: Ticket },
   { to: "/runs", label: "Activity", icon: Activity },
   { to: "/repo", label: "Repo", icon: GitBranch },
-  { to: "/prs", label: "Pull request", icon: GitPullRequest },
+  { to: "/prs", label: "Pull requests", icon: GitPullRequest },
   { to: "/costs", label: "Costs", icon: CircleDollarSign },
   { to: "/settings", label: "Settings", icon: Settings },
 ]
@@ -46,10 +47,30 @@ function Agents() {
   const asks = data?.approvals.length ?? 0
   return (
     <span className="flex items-center gap-3 text-sm">
-      <span className="flex items-center gap-2">
-        <Lamp kind={n ? "violet" : "idle"} live={n > 0} />
-        {n ? `${n} ${n === 1 ? "agent working" : "agents working"}` : "No agent working"}
-      </span>
+      {n ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted">
+            <Lamp kind="violet" live />
+            {n} {n === 1 ? "agent working" : "agents working"}
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-72">
+            {data?.running.map((r) => (
+              <DropdownMenuItem key={r.id} asChild>
+                <Link to={`/runs/${r.id}`} className="flex flex-col items-start gap-0.5">
+                  <span className="w-full truncate font-medium">{r.ticket_title}</span>
+                  <span className="text-xs text-muted-foreground">{r.ticket_id} · {r.kind}</span>
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <span className="flex items-center gap-2">
+          <Lamp kind="idle" />
+          No agent working
+        </span>
+      )}
       {asks > 0 && (
         <Link to="/" className="rounded-sm bg-lamp-amber/25 px-2 py-0.5 text-[13px] font-medium">
           {asks} {asks === 1 ? "request waiting" : "requests waiting"}
@@ -83,6 +104,7 @@ function ProjectSwitch() {
 
 export function Shell() {
   useAttention()
+  const { pathname } = useLocation()
   const { dark, setTheme } = useTheme()
   const qc = useQueryClient()
   const logout = async () => {
@@ -108,7 +130,7 @@ export function Shell() {
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 whitespace-nowrap rounded-sm px-3 py-2 text-[14px] text-muted-foreground hover:bg-muted hover:text-foreground",
-                  isActive && "bg-accent font-medium text-accent-foreground hover:bg-accent",
+                  isActive && "bg-accent font-medium text-accent-foreground shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
                 )
               }
             >
@@ -136,8 +158,8 @@ export function Shell() {
           </div>
         </header>
         <Notice />
-        <main className="px-4 py-6 sm:px-6">
-          <Outlet />
+        <main className="mx-auto max-w-[1280px] px-4 py-8 sm:px-8">
+          <div key={pathname} className="page-in"><Outlet /></div>
         </main>
       </div>
       <TicketSheet />
