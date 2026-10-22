@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Hand, OctagonX } from "lucide-react"
+import { Hand, Loader2, OctagonX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
@@ -16,6 +16,7 @@ export const MODES: { id: Mode; label: string; hint: string }[] = [
 export function ModeSwitch() {
   const { data } = useOverview()
   const { act, pending } = useAct()
+  const [target, setTarget] = useState<Mode | null>(null)
   if (!data) return null
   const mode = data.control.mode
   return (
@@ -27,7 +28,12 @@ export function ModeSwitch() {
           aria-checked={mode === m.id}
           title={m.hint}
           disabled={pending}
-          onClick={() => mode !== m.id && act(() => put("/api/control", { mode: m.id }), `Mode: ${m.label}`)}
+          onClick={async () => {
+            if (mode === m.id) return
+            setTarget(m.id)
+            await act(() => put("/api/control", { mode: m.id }), `Mode: ${m.label}`)
+            setTarget(null)
+          }}
           className={cn(
             "px-3 py-1.5 text-[13px] transition-colors not-last:border-r",
             mode === m.id
@@ -35,6 +41,7 @@ export function ModeSwitch() {
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >
+          {pending && target === m.id && <Loader2 className="mr-1.5 inline size-3.5 animate-spin align-[-2px] motion-reduce:animate-none" aria-hidden />}
           {m.label}
         </button>
       ))}

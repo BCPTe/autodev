@@ -28,7 +28,7 @@ function DailyCap({ current }: { current: number }) {
     <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { daily_budget_usd: n }), "Daily cap updated") }}>
       <span aria-hidden>$</span>
       <Input aria-label="Daily cap in dollars" className="h-8 w-24" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || n === current}>Save</Button>
+      <Button type="submit" size="sm" variant="outline" loading={pending} disabled={!valid || n === current}>Save</Button>
     </form>
   )
 }
@@ -40,7 +40,7 @@ function QuietHours({ current }: { current: string | null }) {
   return (
     <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { quiet_hours: value }), value ? "Quiet hours saved" : "Quiet hours removed") }}>
       <Input aria-label="Quiet hours" className="h-8 w-36 font-mono" placeholder="22:00-07:00" value={value} onChange={(e) => setValue(e.target.value)} />
-      <Button type="submit" size="sm" variant="outline" disabled={pending || !valid || value === (current ?? "")}>Save</Button>
+      <Button type="submit" size="sm" variant="outline" loading={pending} disabled={!valid || value === (current ?? "")}>Save</Button>
       <span className="text-xs text-muted-foreground">Empty = always on. In these hours nothing starts by itself.</span>
     </form>
   )

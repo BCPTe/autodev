@@ -69,7 +69,7 @@ export function Login({ setupRequired, onDone }: { setupRequired: boolean; onDon
             </div>
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" disabled={busy}>
+          <Button type="submit" className="w-full" loading={busy}>
             {busy ? "Please wait…" : setupRequired ? "Create password and sign in" : "Sign in"}
           </Button>
         </div>

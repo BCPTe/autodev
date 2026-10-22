@@ -129,7 +129,7 @@ export function CommentBox({ ticketId }: { ticketId: string }) {
         placeholder="Answer its questions or add context: it goes into the ticket's comments on Notion and the agent reads it"
         className="w-full resize-y rounded-md border bg-background px-3 py-2 text-[13.5px]"
       />
-      <Button type="submit" size="sm" disabled={pending || !text.trim()}>Send comment</Button>
+      <Button type="submit" size="sm" loading={pending} disabled={!text.trim()}>Send comment</Button>
     </form>
   )
 }

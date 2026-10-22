@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import { Loader2 } from "lucide-react"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
@@ -37,26 +38,53 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * A click handler that returns a promise (an API call) puts the button in a loading state until it
+ * settles: spinner, disabled, aria-busy. `loading` forces it (e.g. submit buttons whose work runs in a form handler).
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  loading,
+  onClick,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    loading?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
+  const [busy, setBusy] = React.useState(false)
+  const mounted = React.useRef(true)
+  React.useEffect(() => () => { mounted.current = false }, [])
+  const isLoading = !asChild && (loading ?? busy)
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const result = onClick?.(e) as unknown
+    if (!asChild && result && typeof (result as Promise<unknown>).then === "function") {
+      setBusy(true)
+      void Promise.resolve(result).finally(() => mounted.current && setBusy(false))
+    }
+  }
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      aria-busy={isLoading || undefined}
+      className={cn(buttonVariants({ variant, size, className }), isLoading && "[&>svg:not([data-spinner])]:hidden")}
+      disabled={disabled || isLoading}
+      onClick={handleClick}
       {...props}
-    />
+    >
+      {isLoading && <Loader2 data-spinner className="animate-spin motion-reduce:animate-none" aria-hidden />}
+      {children}
+    </Comp>
   )
 }
 
