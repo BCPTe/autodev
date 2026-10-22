@@ -24,7 +24,7 @@ def test_explicit_choice_wins_on_every_attempt(label, expected):
 @pytest.mark.parametrize("label", [None, "Auto"])
 def test_auto_starts_cheap_and_escalates_on_retry(label):
     assert [pick_model(CFG, ticket(label), a) for a in (1, 2, 3)] == [
-        "claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5-5",
+        "claude-sonnet-5-5", "claude-sonnet-5-5", "claude-opus-5-5",
     ]
 
 
@@ -72,11 +72,11 @@ async def test_triage_runs_do_not_consume_fix_attempts(monkeypatch):
 def test_budget_is_cumulative_over_everything_booked_on_the_ticket():
     from autodev.pipeline import budget_message, remaining_budget
 
-    assert CFG.limits.budget_usd_per_ticket == 6.0
-    t = Ticket(id="t", title="x", status=Status.IN_PROGRESS, cost_usd=2.5)
-    assert remaining_budget(CFG, t) == pytest.approx(3.5)
-    assert remaining_budget(CFG, t, spent_now=1.0) == pytest.approx(2.5)
-    assert "$3.50 of $6.00" in budget_message(CFG, t, spent_now=1.0)
+    assert CFG.limits.budget_usd_per_ticket == 3.0
+    t = Ticket(id="t", title="x", status=Status.IN_PROGRESS, cost_usd=1.5)
+    assert remaining_budget(CFG, t) == pytest.approx(1.5)
+    assert remaining_budget(CFG, t, spent_now=1.0) == pytest.approx(0.5)
+    assert "$2.50 of $3.00" in budget_message(CFG, t, spent_now=1.0)
 
 
 async def test_exhausted_budget_stops_before_any_agent_runs(monkeypatch):

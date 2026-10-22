@@ -145,7 +145,7 @@ def test_overview_counts_tickets_and_builds_the_inbox(client, env):
     assert o["counts"] == {"analyzed": 1, "in_progress": 1, "new": 1}
     assert [i["ticket"]["title"] for i in o["inbox"]] == ["Bug uno"]
     assert len(o["running"]) == 1 and len(o["recent_problems"]) == 1
-    assert o["daily_cap"] == CFG.limits.daily_budget_usd and o["ticket_cap"] == 6.0
+    assert o["daily_cap"] == CFG.limits.daily_budget_usd and o["ticket_cap"] == 3.0
 
 
 def test_tickets_are_cached_briefly_and_refresh_bypasses_the_cache(client, env):

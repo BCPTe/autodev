@@ -1,4 +1,10 @@
-export const money = (v: number) => `$${v.toFixed(2)}`
+export const money = (v: number) => `$${v > 0 && v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`
+
+export function tokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${Math.round(n / 1_000)}k`
+  return String(n)
+}
 
 export function duration(seconds: number): string {
   const s = Math.max(0, Math.round(seconds))

@@ -5,12 +5,14 @@ shared database that the runner polls, so a run started from a terminal can be s
 dashboard (and the other way round).
 """
 import asyncio
+import json
 import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Awaitable, Callable, TypeVar
 
+from autodev.agents.usage import SessionUsage, usage_log
 from autodev.db import Database, dumps, now
 from autodev.knowledge import record_usage
 from autodev.models import Ticket
@@ -117,6 +119,8 @@ async def run_tracked(
         if echo:
             echo(line)
 
+    sessions: list[SessionUsage] = []
+    log_token = usage_log.set(sessions)
     inner = asyncio.ensure_future(work(report))
 
     async def watch_cancel() -> None:
@@ -131,20 +135,21 @@ async def run_tracked(
     try:
         result = await inner
     except asyncio.CancelledError:
-        _finish(db, run_id, "cancelled", error="stopped by the user")
+        _finish(db, run_id, "cancelled", error="stopped by the user", sessions=sessions)
         add_event(db, run_id, "cancelled", "stopped by the user")
         raise RunCancelled(f"run {run_id} stopped") from None
     except Exception as e:
-        _finish(db, run_id, "failed", error=str(e))
+        _finish(db, run_id, "failed", error=str(e), sessions=sessions)
         add_event(db, run_id, "error", str(e))
         raise
     finally:
         watcher.cancel()
+        usage_log.reset(log_token)
 
     summary = summarize(result)
     if summary.result_text:
         add_event(db, run_id, "result", summary.result_text)
-    _finish(db, run_id, "done", summary=summary)
+    _finish(db, run_id, "done", summary=summary, sessions=sessions)
     playbook = summary.extra.get("playbook")
     if playbook:
         record_usage(db, project, run_id, playbook["injected"], playbook["cited"])
@@ -152,9 +157,17 @@ async def run_tracked(
     return result
 
 
-def _finish(db: Database, run_id: int, status: str, *, error: str | None = None, summary: RunSummary | None = None) -> None:
+def _finish(
+    db: Database, run_id: int, status: str, *, error: str | None = None, summary: RunSummary | None = None,
+    sessions: list[SessionUsage] | None = None,
+) -> None:
     s = summary or RunSummary()
+    sessions = sessions or []
+    spent = sum(x.cost_usd for x in sessions) if sessions else s.cost_usd  # what the sessions cost, also when the run failed
     db.execute(
-        "UPDATE runs SET status = ?, finished_at = ?, error = ?, outcome = ?, cost_usd = ?, model = ?, branch = ?, pr_url = ?, turns = ? WHERE id = ?",
-        (status, now(), error, s.outcome or None, s.cost_usd, s.model, s.branch, s.pr_url, s.extra.get("turns", 0), run_id),
+        "UPDATE runs SET status = ?, finished_at = ?, error = ?, outcome = ?, cost_usd = ?, model = ?, branch = ?, pr_url = ?, turns = ?, usage = ? WHERE id = ?",
+        (
+            status, now(), error, s.outcome or None, spent, s.model or (sessions[-1].model if sessions else None), s.branch, s.pr_url,
+            s.extra.get("turns") or sum(x.turns for x in sessions), json.dumps([x.as_dict() for x in sessions]) if sessions else None, run_id,
+        ),
     )

@@ -10,7 +10,7 @@ from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
 from autodev import knowledge
-from autodev.agents.session import run_session
+from autodev.agents.session import isolation, run_session
 from autodev.config import ProjectConfig
 from autodev.control import current_control
 from autodev.db import Database
@@ -66,6 +66,18 @@ class LearnOutcome:
     turns: int = 0
     model: str | None = None
     texts: list[str] = field(default_factory=list)
+    skipped: bool = False
+
+
+def eventful(comments: list[Comment], runs: list[dict], approvals: list[dict]) -> bool:
+    """Whether the ticket left anything a playbook could learn from: people spoke, a fix was retried, a reviewer left a note."""
+    fixes = [r for r in runs if r["kind"] == "fix"]
+    return (
+        any(not c.is_bot for c in comments)
+        or len(fixes) > 1
+        or any(a["note"] for a in approvals if a["status"] in ("allowed", "denied"))
+        or any(a["status"] == "denied" for a in approvals)
+    )
 
 
 def learn_model(cfg: ProjectConfig) -> str:
@@ -151,6 +163,7 @@ async def run_learn(cfg: ProjectConfig, evidence: str, current_playbook: str, re
         max_turns=MAX_TURNS,
         max_budget_usd=min(1.0, cfg.limits.budget_usd_per_ticket),
         output_format={"type": "json_schema", "schema": LearnResult.model_json_schema()},
+        **isolation(),
     )
 
     def on_message(message) -> None:
@@ -161,7 +174,7 @@ async def run_learn(cfg: ProjectConfig, evidence: str, current_playbook: str, re
 
     if progress:
         progress("starting the retrospective")
-    message = await run_session(f"Review this ticket and propose playbook entries (or none).\n\n{evidence}", options, on_message)
+    message = await run_session(f"Review this ticket and propose playbook entries (or none).\n\n{evidence}", options, on_message, "learn")
     if message.is_error or message.structured_output is None:
         raise RuntimeError(f"retrospective failed ({model}): {message.subtype} {message.errors or message.result}")
     return LearnResult.model_validate(message.structured_output), message.total_cost_usd or 0.0, message.num_turns, model
@@ -183,9 +196,15 @@ def sanitize(result: LearnResult, area: str | None) -> list[dict]:
     return items[:MAX_PROPOSALS]
 
 
-async def learn_ticket(cfg: ProjectConfig, tracker, db: Database, project: str, ticket: Ticket, report: Report | None = None) -> LearnOutcome:
+async def learn_ticket(
+    cfg: ProjectConfig, tracker, db: Database, project: str, ticket: Ticket, report: Report | None = None, skip_uneventful: bool = False
+) -> LearnOutcome:
     full, comments = await tracker.detail(ticket.id)
     runs, approvals = run_facts(db, project, ticket.id)
+    if skip_uneventful and not eventful(comments, runs, approvals):
+        if report:
+            report("nothing to learn from a ticket that went smoothly: retrospective skipped")
+        return LearnOutcome(skipped=True)
     stat = await asyncio.to_thread(diff_stat, cfg, full.branch or ticket.branch)
     _, entries = knowledge.load(cfg)
     current = "\n".join(e.prompt_line() for e in entries)

@@ -72,6 +72,7 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Quiet hours** (`autonomy.quiet_hours: "22:00-07:00"`, editable in Settings): nothing starts by itself in that window; a manual Start still works.
 - **Notifications:** a desktop notification (via `notify-send`, or `autonomy.notify_command` with `{title}` and `{body}`) when a request or checkpoint waits for you, a run finishes or fails, the daily cap is reached or a PR is merged. The browser tab title shows the number of pending requests, and optional browser notifications work while the tab is open in the background.
 - **Housekeeping:** every polling round a merged PR closes its ticket and a PR closed unmerged escalates it (`autonomy.auto_cleanup_branches: true` also deletes the merged local branch).
+- **Costs:** every agent session records its tokens (input, output, cache read/write), cost, turns and tool calls; the Costs page breaks them down by stage and model, area and outcome. Agents run without the Claude account's MCP connectors and personal memory (`agents.*.user_mcp`), which had been ~2/3 of the spend. See [docs/COSTS.md](docs/COSTS.md).
 - **Several projects:** `uv run autodev serve` serves every file in `projects/` (or the ones named with `--project`, repeatable). A project switcher appears in the sidebar; mode, daily cap, quiet hours, runs and costs are per project, and each project's agent works on its own checkout.
 
 ## Layout

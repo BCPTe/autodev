@@ -19,7 +19,7 @@ def no_real_retrospective(monkeypatch):
     """The retrospective agent never runs for real in tests; the tickets it was asked about are collected."""
     asked: list[str] = []
 
-    async def fake(cfg, tracker, db, project, ticket, report=None):
+    async def fake(cfg, tracker, db, project, ticket, report=None, skip_uneventful=False):
         asked.append(ticket.id)
         return LearnOutcome()
 

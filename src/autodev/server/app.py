@@ -17,7 +17,7 @@ from autodev.jobs import daily_cap, mark_orphans, spent_today, start_of_today
 from autodev.models import Comment, Status, Ticket
 from autodev.server import auth as authmod
 from autodev.server.auth import COOKIE, Auth
-from autodev import github, knowledge
+from autodev import costs as costs_mod, github, knowledge
 from autodev.server import repo as repomod
 from autodev.sandbox.workspace import identity_flags
 from autodev.server.repo import RepoError, repo_state
@@ -144,6 +144,8 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         r = dict(r)
         r["cancel_requested"] = bool(r["cancel_requested"])
         r["duration"] = (r["finished_at"] or time.time()) - r["started_at"]
+        r["sessions"] = costs_mod.sessions_of(r)
+        r.pop("usage", None)
         return r
 
     @r.get("/overview", dependencies=[Depends(require_session)])
@@ -399,6 +401,9 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             "by_model": db.query("SELECT COALESCE(model, 'n/d') AS model, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY model ORDER BY cost DESC", (project,)),
             "by_kind": db.query("SELECT kind, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY kind", (project,)),
             "by_ticket": db.query("SELECT ticket_id, ticket_title AS title, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY ticket_id ORDER BY cost DESC LIMIT 10", (project,)),
+            "by_stage_model": costs_mod.by_stage_model(db, project),
+            "by_area": costs_mod.by_area(db, project),
+            "by_outcome": costs_mod.by_outcome(db, project),
         }
 
     # ---- playbook ------------------------------------------------------------------------
