@@ -24,6 +24,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | `repo` | Remote URL of the repository: in the checkout, `git remote get-url origin`. |
 | `base_branch` | Branch that fixes branch from and PRs target (`staging`, `main`...). `git branch -a` in the checkout, or the repo's default branch on GitHub. |
 | `local_path` | Absolute path of the project's checkout on this machine. |
+| `git_identity` | Optional `{name, email}`. By default commits are made as the person running autodev (`git config user.name/user.email` in the checkout), because hosts like Vercel only deploy commits from project members. autodev refuses to commit when no identity is found. |
 | `branch_prefix` | Prefix of the branches the agents create (default `autodev`, giving `autodev/<ticket>-<id>`). |
 | `workspace_mode` | `inplace`: the agent works in `local_path` itself on its own branch (you can test it with your running Docker; the tree must be clean). `clone`: a throwaway clone under `workspaces/` (needs `prepare`/`exclude` below). |
 

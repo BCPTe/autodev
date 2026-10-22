@@ -68,6 +68,11 @@ class Regression(BaseModel):
     cwd: str = "."
 
 
+class GitIdentity(BaseModel):
+    name: str | None = None
+    email: str | None = None
+
+
 class PRConfig(BaseModel):
     create: bool = False
     slug: str | None = None
@@ -95,6 +100,7 @@ class ProjectConfig(BaseModel):
     name: str = ""
     language: str = "English"
     branch_prefix: str = "autodev"
+    git_identity: GitIdentity | None = None
     repo: str
     base_branch: str
     local_path: str

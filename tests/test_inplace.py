@@ -42,13 +42,35 @@ def test_refuses_to_start_when_the_checkout_has_uncommitted_work(project):
     assert (local / "shop" / "pricing.py").read_text() == "# my wip\n"
 
 
-def test_commits_are_authored_by_autodev_without_touching_the_repo_config(project):
+def test_commits_are_made_as_the_person_running_autodev_not_as_a_bot(project):
     cfg, local = project
     ws = Workspace.create(cfg, TICKET)
     (ws.path / "shop" / "new.py").write_text("X = 1\n")
     ws.commit("add new")
-    assert git_out(local, "log", "-1", "--format=%an <%ae>") == "autodev <autodev@users.noreply.github.com>"
+    assert git_out(local, "log", "-1", "--format=%an <%ae> | %cn <%ce>") == "t <t@t> | t <t@t>"
+
+
+def test_git_identity_in_the_project_file_overrides_the_checkout_config(project):
+    from autodev.config import GitIdentity
+
+    cfg, local = project
+    cfg.git_identity = GitIdentity(name="Jane Dev", email="jane@example.com")
+    ws = Workspace.create(cfg, TICKET)
+    (ws.path / "shop" / "new.py").write_text("X = 1\n")
+    ws.commit("add new")
+    assert git_out(local, "log", "-1", "--format=%an <%ae>") == "Jane Dev <jane@example.com>"
     assert git_out(local, "config", "user.name") == "t"
+
+
+def test_without_any_git_identity_autodev_refuses_instead_of_committing_as_a_bot(project, monkeypatch, tmp_path):
+    from autodev.sandbox.workspace import identity_flags
+
+    cfg, local = project
+    git_out(local, "config", "--unset", "user.name")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "empty"))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(tmp_path / "empty"))
+    with pytest.raises(RuntimeError, match="no git identity"):
+        identity_flags(cfg)
 
 
 def test_second_run_resumes_the_branch_it_left_checked_out(project):

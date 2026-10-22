@@ -73,7 +73,7 @@ function PrRow({ p }: { p: Pr }) {
             <GitMerge /> {armed ? "Confirm: squash and merge" : "Merge"}
           </Button>
         )}
-        {blocker && <span className="text-xs text-muted-foreground">{blocker}</span>}
+        {blocker && <span className="text-[13px] font-medium text-foreground">Merge is disabled: {blocker}</span>}
       </div>
     </li>
   )

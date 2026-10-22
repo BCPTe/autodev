@@ -9,7 +9,30 @@ from autodev.config import ProjectConfig
 from autodev.models import Ticket
 
 WORKSPACES = Path(__file__).resolve().parents[3] / "workspaces"
-AUTHOR = ["-c", "user.name=autodev", "-c", "user.email=autodev@users.noreply.github.com"]
+
+
+def identity_flags(cfg: ProjectConfig) -> list[str]:
+    """Commits are made as the person running autodev: their `git config` in the project checkout.
+
+    Hosts such as Vercel only accept commits from members of the project, so a bot identity breaks
+    deployments on free plans. `git_identity` in the project file overrides it.
+    """
+    name, email = (cfg.git_identity.name, cfg.git_identity.email) if cfg.git_identity else (None, None)
+    path = Path(cfg.local_path)
+    for key, value in (("user.name", name), ("user.email", email)):
+        if not value:
+            r = subprocess.run(["git", "config", key], cwd=path, capture_output=True, text=True)
+            value = r.stdout.strip()
+            if not value:
+                raise RuntimeError(
+                    f"no git identity: run `git config user.name` and `git config user.email` in {path} "
+                    "(or set `git_identity` in the project file); autodev commits as you, not as a bot"
+                )
+        if key == "user.name":
+            name = value
+        else:
+            email = value
+    return ["-c", f"user.name={name}", "-c", f"user.email={email}"]
 
 
 class DirtyCheckout(RuntimeError):
@@ -58,6 +81,7 @@ class Workspace:
     start_ref: str = ""
     resumed: bool = False
     inplace: bool = False
+    author: tuple[str, ...] = ()
 
     @classmethod
     def create(cls, cfg: ProjectConfig, ticket: Ticket) -> "Workspace":
@@ -90,13 +114,13 @@ class Workspace:
         else:
             git(path, "checkout", "--quiet", "-b", branch, base_ref)
             resumed = False
-        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"), resumed=resumed, inplace=True)
+        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"), resumed=resumed, inplace=True, author=tuple(identity_flags(cfg)))
 
     @classmethod
     def _merge_base(cls, cfg: ProjectConfig, path: Path, branch: str, base_ref: str) -> None:
         if run(["git", "merge-base", "--is-ancestor", base_ref, "HEAD"], path).returncode == 0:
             return
-        merged = run(["git", *AUTHOR, "merge", "--no-edit", "--quiet", base_ref], path)
+        merged = run(["git", *identity_flags(cfg), "merge", "--no-edit", "--quiet", base_ref], path)
         if merged.returncode != 0:
             run(["git", "merge", "--abort"], path)
             raise RuntimeError(
@@ -127,7 +151,7 @@ class Workspace:
             r = sh(expand(cmd, cfg), path)
             if r.returncode != 0:
                 raise RuntimeError(f"prepare step failed: {cmd}\n{r.stderr.strip()}")
-        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"))
+        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"), author=tuple(identity_flags(cfg)))
 
     @classmethod
     def _resume(cls, cfg: ProjectConfig, path: Path, branch: str) -> "Workspace":
@@ -138,7 +162,7 @@ class Workspace:
         git(path, "clean", "-fdq")
         base_ref = f"origin/{cfg.base_branch}"
         cls._merge_base(cfg, path, branch, base_ref)
-        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"), resumed=True)
+        return cls(path, branch, base_ref, start_ref=git(path, "rev-parse", "HEAD"), resumed=True, author=tuple(identity_flags(cfg)))
 
     def changed_files(self, since: str | None = None) -> list[str]:
         """Files changed relative to ``since`` (default: where this run started)."""
@@ -191,7 +215,7 @@ class Workspace:
 
     def commit(self, message: str) -> str:
         git(self.path, "add", "-A")
-        git(self.path, *AUTHOR, "commit", "--quiet", "-m", message)
+        git(self.path, *self.author, "commit", "--quiet", "-m", message)
         return git(self.path, "rev-parse", "HEAD")
 
     def has_commits(self) -> bool:
