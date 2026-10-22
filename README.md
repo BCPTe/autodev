@@ -55,6 +55,12 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
 - Finished runs cannot be resumed with a chat yet.
 
+### The playbook (Learnings)
+
+- Each project has `projects/<name>.knowledge.md`: short entries in four categories (`where` things live, `domain` rules people decided, `gotcha`s, `command`s that work), each with its source ticket, date, optional area and paths. The triage and fix agents receive the relevant ones (by the ticket's Area and by paths, within `knowledge.max_chars`); triage must check the playbook before asking a question and cites the entries it used in its comment.
+- When a PR is merged, a cheap read-only **retrospective** run (kind `learn`, in Activity) reads the ticket, the human answers, the checkpoint rejections, the changed files and the effort, and **proposes** entries. Nothing enters the playbook until you press Accept on the **Learnings** page (or Edit and accept); paths that do not exist in the checkout are flagged. "Learn from this ticket" runs it on demand.
+- The page also shows the current playbook (with how often each entry was used and cited, and Delete) and per-area effort: tickets, average cost and turns, questions asked, retries and checkpoint rejections. Configure it under `knowledge:` ([docs/CONFIG.md](docs/CONFIG.md)).
+
 ### Repo and pull requests
 
 - **Repo:** the checkout's state, the agent branches with a file-by-file diff, "Try" (switch to a branch to test it with Docker), "Back to <base>", and **Run the checks** (the project's `checks` as a tracked run). Switching branches and deleting are refused while an agent works or when the tree is dirty.
@@ -71,7 +77,7 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 ## Layout
 
 ```
-src/autodev/   orchestrator (trackers, agents, sandbox, pipeline, github, report)
+src/autodev/   orchestrator (trackers, agents, sandbox, pipeline, github, knowledge playbook, report)
 e2e/           black-box Playwright suites, one folder per project
 projects/      per-project configuration
 docs/          design notes, Notion schema

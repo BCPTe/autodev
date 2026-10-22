@@ -83,5 +83,18 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | `comment_author` | Name shown on Notion comments written from the dashboard (default: your git user name). |
 | `auto_cleanup_branches` | Delete the local branch when its PR is merged. |
 
+### `knowledge` (the playbook the agents learn from)
+Optional. A short, versioned file of facts about the project (`projects/<name>.knowledge.md`) is injected into the triage and fix prompts; a cheap retrospective agent proposes new entries when a ticket is closed, and you accept or reject each one on the dashboard's **Learnings** page.
+
+| Key | Meaning |
+|---|---|
+| `enabled` | Turn the whole mechanism off (default `true`). |
+| `file` | Markdown file next to the project YAML (default `<name>.knowledge.md`). |
+| `max_chars` | Most characters of playbook put in one prompt (default 6000). Entries for the ticket's Area and for paths named in the ticket or the triage analysis come first, then the most recent. |
+| `model` | Model of the retrospective agent (default: the first, cheapest, `agents.triage.models`). |
+| `auto_propose_on_close` | Run the retrospective by itself when a PR is merged (from the dashboard or by housekeeping; default `true`). It only proposes; it never edits the file. "Learn from this ticket" on a closed ticket runs it on demand. |
+
+The file has one `## where`, `## domain`, `## gotcha` and `## command` section, one bullet per entry, with an optional trailing metadata comment (`id`, source ticket, date, `area`, `paths`). You can edit it by hand; when you accept or delete an entry from the dashboard the file is rewritten in this format.
+
 ### Present in the file but not used by the code
 `commands` and `environments` (in `demo.yaml`) are notes for humans today; no part of autodev reads them. You can omit them.

@@ -16,6 +16,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from autodev import engine as engine_mod  # noqa: E402
+from autodev import knowledge  # noqa: E402
 from autodev.control import checkpoint, current_control  # noqa: E402
 from autodev.db import Database  # noqa: E402
 from autodev.engine import Engine  # noqa: E402
@@ -74,9 +75,35 @@ class FakeTracker:
         ]
 
 
+def seed_knowledge(cfg, db: Database, root: Path) -> None:
+    """A small playbook, a few proposals (one cites a path that does not exist) and some usage."""
+    cfg.knowledge_path = str(root / "demo.knowledge.md")
+    (root / "local" / "shop" / "pricing.py").parent.mkdir(exist_ok=True)
+    add = lambda cat, text, **kw: knowledge.add_entry(cfg, knowledge.Entry(id="", category=cat, text=text, source_id="t8", source_title="Address book: duplicates after import", date="2026-10-18", **kw))  # noqa: E731
+    a = add("where", "The PDF export is built in apps/backend/app/api/orders/export.py; the field list comes from the knowledge_base JSON of the region.", area="Export PDF", paths=["shop/pricing.py"])
+    b = add("domain", "SCIA SUE Calabria: both designer contacts (phone or mobile) are optional individually, but one of them is required.", area="Autofill")
+    add("gotcha", "Editing a *_fields.json file requires restarting the backend: the file is cached at startup.", paths=["data/knowledge_base"])
+    add("command", "Backend tests from the repository root: python -m pytest -q -c apps/backend/pytest.ini <path>")
+    tk = Ticket(id="t9", title="The admin dark theme has unreadable text", status=Status.CLOSED)
+    knowledge.propose(db, cfg, "demo", tk, None, [
+        {"category": "where", "text": "The admin theme tokens live in apps/frontend/styles/admin.css.", "area": "Admin", "paths": ["apps/frontend/styles/admin.css"], "evidence": "The merged PR changed only this file."},
+        {"category": "domain", "text": "Admin pages must keep a contrast ratio of at least 4.5:1 in dark mode.", "area": "Admin", "paths": [], "evidence": "Christian's comment: the contrast has to pass AA."},
+        {"category": "gotcha", "text": "Do not edit the generated tokens.css by hand: it is overwritten by the build.", "area": "Admin", "paths": ["shop/pricing.py"], "evidence": "The first attempt was rejected at the checkpoint with this note."},
+    ])
+    run = seed_run_for_usage(db)
+    knowledge.record_usage(db, "demo", run, [a.id, b.id], [a.id])
+
+
+def seed_run_for_usage(db: Database) -> int:
+    return db.execute(
+        "INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, finished_at, cost_usd, turns, area, outcome) VALUES('demo', 't2', 'x', 'triage', 'done', ?, ?, 0.12, 6, 'Autofill', 'analyzed')",
+        (NOW - 7200, NOW - 7100),
+    )
+
+
 def seed(db: Database) -> int:
     def run(**kw):
-        cols = dict(project="demo", status="done", started_at=NOW - 3 * 3600, finished_at=NOW - 3 * 3600 + 90, cost_usd=0.17, model="claude-haiku-5-5", outcome="analyzed", kind="triage", ticket_id="t2", ticket_title="Director signature required only if the designer has a name")
+        cols = dict(project="demo", status="done", area="Autofill", turns=8, started_at=NOW - 3 * 3600, finished_at=NOW - 3 * 3600 + 90, cost_usd=0.17, model="claude-haiku-5-5", outcome="analyzed", kind="triage", ticket_id="t2", ticket_title="Director signature required only if the designer has a name")
         cols.update(kw)
         return db.execute(f"INSERT INTO runs({','.join(cols)}) VALUES({','.join('?' * len(cols))})", tuple(cols.values()))
 
@@ -154,8 +181,10 @@ def main() -> None:
     port, db_path = int(sys.argv[1]), sys.argv[2]
     Path(db_path).unlink(missing_ok=True)
     db = Database(db_path)
-    cfg = make_project(Path(tempfile.mkdtemp(prefix="autodev-demo-")))
+    root = Path(tempfile.mkdtemp(prefix="autodev-demo-"))
+    cfg = make_project(root)
     live = seed(db)
+    seed_knowledge(cfg, db, root)
     fake_agents()
     cfg.pr.slug = "o/r"
     git(cfg.local_path, "fetch", "-q")

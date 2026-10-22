@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { api, type Comment, type ProjectInfo, type DiffFile, type Pr, type Interactive, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
+import { api, type Comment, type ProjectInfo, type DiffFile, type Pr, type Interactive, type Knowledge, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
 
 export const useOverview = () =>
   useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 5000 })
@@ -48,3 +48,6 @@ export const useProjects = () =>
     queryFn: () => api<{ default: string; projects: ProjectInfo[] }>("/api/projects"),
     refetchInterval: 10000,
   })
+
+export const useKnowledge = () =>
+  useQuery({ queryKey: ["knowledge"], queryFn: () => api<Knowledge>("/api/knowledge"), refetchInterval: 10000 })

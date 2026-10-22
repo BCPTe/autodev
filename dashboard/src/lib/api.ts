@@ -138,7 +138,7 @@ export interface Run {
   project: string
   ticket_id: string
   ticket_title: string
-  kind: "triage" | "fix" | "checks" | "publish"
+  kind: "triage" | "fix" | "checks" | "publish" | "learn"
   status: "running" | "done" | "failed" | "cancelled"
   model: string | null
   started_at: number
@@ -175,7 +175,7 @@ export interface Approval {
   created_at: number
   ticket_id: string
   ticket_title: string
-  run_kind: "triage" | "fix" | "checks" | "publish"
+  run_kind: "triage" | "fix" | "checks" | "publish" | "learn"
 }
 
 export interface Interactive {
@@ -260,4 +260,55 @@ export interface Config {
   never_automerge: string[]
   daily_cap_effective: number
   autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[]; permission_policy: "ask" | "trusted"; checkpoints: ("after_agent" | "before_pr")[] }
+}
+
+export type LearningCategory = "where" | "domain" | "gotcha" | "command"
+
+export interface Proposal {
+  id: number
+  category: LearningCategory
+  text: string
+  area: string
+  paths: string[]
+  missing_paths: string[]
+  evidence: string
+  source_ticket_id: string
+  source_title: string
+  created_at: number
+}
+
+export interface PlaybookEntry {
+  id: string
+  category: LearningCategory
+  text: string
+  area: string
+  paths: string[]
+  missing_paths: string[]
+  source_id: string
+  source_title: string
+  date: string
+  uses: number
+  cited: number
+  last_used: number | null
+}
+
+export interface AreaMetrics {
+  area: string
+  tickets: number
+  avg_cost: number
+  avg_turns: number
+  questions: number
+  retries: number
+  rejections: number
+}
+
+export interface Knowledge {
+  enabled: boolean
+  file: string | null
+  max_chars: number
+  auto_propose_on_close: boolean
+  chars: number
+  entries: PlaybookEntry[]
+  proposals: Proposal[]
+  metrics: AreaMetrics[]
 }

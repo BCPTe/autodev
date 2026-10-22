@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { GitPullRequest, Play, RotateCcw, ShieldCheck } from "lucide-react"
+import { GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
@@ -26,7 +26,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
 
   const setStatus = (status: TicketState, done: string, extra: object = {}) =>
     act(() => patch(`/api/tickets/${t.id}`, { status, ...extra }), done)
-  const start = (kind: "triage" | "fix" | "publish", done: string) => act(() => post(`/api/tickets/${t.id}/start`, { kind }), done)
+  const start = (kind: "triage" | "fix" | "publish" | "learn", done: string) => act(() => post(`/api/tickets/${t.id}/start`, { kind }), done)
   const approveAndStart = async () => {
     if (await setStatus("in_progress", "Approved")) await start("fix", "Fix started")
   }
@@ -70,6 +70,17 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
             onClick={() => start("publish", "Opening the pull request")}
           >
             <GitPullRequest /> Open PR
+          </Button>
+        )}
+        {(state === "closed" || state === "review") && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending || !!blocked}
+            title={blocked ?? "A cheap read-only agent reads how this ticket went and proposes playbook entries for you to review"}
+            onClick={() => start("learn", "Retrospective started: proposals will appear in Learnings")}
+          >
+            <Lightbulb /> Learn from this ticket
           </Button>
         )}
         {state === "closed" ? (
@@ -137,6 +148,7 @@ export function CommentBox({ ticketId }: { ticketId: string }) {
 const ACTION_LABEL: Record<string, string> = {
   start_triage: "started the triage",
   start_fix: "started the fix",
+  start_learn: "started the retrospective",
   approve: "approved",
   edit: "edited the ticket",
   comment: "commented",

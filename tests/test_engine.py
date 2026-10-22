@@ -257,7 +257,7 @@ async def test_finished_runs_and_requests_raise_a_desktop_notification(tmp_path,
     assert len(desktop_notifications) == 1
 
 
-async def test_a_merged_pull_request_closes_its_ticket_and_a_closed_one_escalates_it(tmp_path, monkeypatch):
+async def test_a_merged_pull_request_closes_its_ticket_and_a_closed_one_escalates_it(tmp_path, monkeypatch, no_real_retrospective):
     e, db, tracker = make(tmp_path, [
         ticket("m", Status.REVIEW, pr_url="https://gh/pull/1"),
         ticket("c", Status.REVIEW, pr_url="https://gh/pull/2"),
@@ -274,7 +274,9 @@ async def test_a_merged_pull_request_closes_its_ticket_and_a_closed_one_escalate
     assert (tracker.tickets["m"].status, tracker.tickets["c"].status, tracker.tickets["o"].status, tracker.tickets["x"].status) == (
         Status.CLOSED, Status.ESCALATED, Status.REVIEW, Status.ANALYZED)
     assert "closed without being merged" in tracker.tickets["c"].agent_note
-    assert {r["action"] for r in db.query("SELECT action FROM actions")} == {"merged", "pr_closed"}
+    assert {r["action"] for r in db.query("SELECT action FROM actions")} == {"merged", "pr_closed", "start_learn"}
+    await e.wait_idle()
+    assert no_real_retrospective == ["m"]
 
 
 async def test_housekeeping_does_nothing_when_github_is_unreachable(tmp_path, monkeypatch):
