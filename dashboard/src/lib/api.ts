@@ -150,6 +150,27 @@ export interface Run {
   pr_url: string | null
   error: string | null
   cancel_requested: boolean
+  sessions?: SessionUsage[]
+}
+
+export interface SessionUsage {
+  stage: string
+  model: string
+  session_id: string
+  turns: number
+  input: number
+  output: number
+  cache_read: number
+  cache_write: number
+  cost_usd: number
+  duration_s: number
+  tools: Record<string, number>
+  tool_result_chars: number
+  largest_result_chars: number
+  peak_context: number
+  denials: number
+  resumed: boolean
+  error: boolean
 }
 
 export interface RunEvent {
@@ -207,6 +228,12 @@ export interface Costs {
   by_model: { model: string; cost: number; runs: number }[]
   by_kind: { kind: string; cost: number; runs: number }[]
   by_ticket: { ticket_id: string; title: string; cost: number; runs: number }[]
+  by_stage_model: { kind: string; model: string; sessions: number; turns: number; input: number; output: number; cache_read: number; cache_write: number; cost: number; untracked: number; peak_context: number; long_context: number }[]
+  by_area: { kind: string; area: string; runs: number; cost: number; avg_cost: number }[]
+  by_outcome: {
+    runs: { kind: string; outcome: string; runs: number; cost: number; avg_cost: number }[]
+    tickets: { outcome: string; tickets: number; cost: number; avg_cost: number }[]
+  }
 }
 
 export interface RepoState {

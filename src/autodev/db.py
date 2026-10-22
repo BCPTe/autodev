@@ -110,7 +110,7 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
         columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(runs)")}
-        for name, ddl in (("dismissed", "INTEGER NOT NULL DEFAULT 0"), ("turns", "INTEGER NOT NULL DEFAULT 0"), ("area", "TEXT")):
+        for name, ddl in (("dismissed", "INTEGER NOT NULL DEFAULT 0"), ("turns", "INTEGER NOT NULL DEFAULT 0"), ("area", "TEXT"), ("usage", "TEXT")):
             if name not in columns:  # added after the first release
                 self._conn.execute(f"ALTER TABLE runs ADD COLUMN {name} {ddl}")
         self._conn.commit()

@@ -122,7 +122,7 @@ class FakeSession:
     def __init__(self, output):
         self.output, self.options, self.prompt = output, None, None
 
-    async def __call__(self, prompt, options, on_message):
+    async def __call__(self, prompt, options, on_message, stage="agent"):
         self.prompt, self.options = prompt, options
         return SimpleNamespace(is_error=False, structured_output=self.output, total_cost_usd=0.1, num_turns=3, subtype="", errors=None, result="")
 

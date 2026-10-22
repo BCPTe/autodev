@@ -2,8 +2,34 @@ import { PageHeader } from "@/components/PageHeader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useCosts } from "@/hooks/queries"
-import { money, shortModel } from "@/lib/format"
+import { money, shortModel, tokens } from "@/lib/format"
+import { KIND_LABEL } from "@/lib/status"
 import { cn } from "@/lib/utils"
+import type { Costs as CostsData } from "@/lib/api"
+
+const label = (kind: string) => KIND_LABEL[kind as keyof typeof KIND_LABEL] ?? kind
+
+function ByArea({ rows }: { rows: CostsData["by_area"] }) {
+  const areas = [...new Set(rows.map((r) => r.area))]
+  const cell = (kind: string, area: string) => rows.find((r) => r.kind === kind && r.area === area)
+  return (
+    <Table>
+      <TableHeader><TableRow><TableHead>Area</TableHead><TableHead className="text-right">Triage (avg)</TableHead><TableHead className="text-right">Fix (avg)</TableHead></TableRow></TableHeader>
+      <TableBody>
+        {areas.map((a) => (
+          <TableRow key={a}>
+            <TableCell>{a}</TableCell>
+            {["triage", "fix"].map((k) => {
+              const r = cell(k, a)
+              return <TableCell key={k} className="text-right tabular-nums">{r ? <>{money(r.avg_cost)} <span className="text-muted-foreground">· {r.runs}</span></> : "—"}</TableCell>
+            })}
+          </TableRow>
+        ))}
+        {areas.length === 0 && <TableRow><TableCell colSpan={3} className="text-muted-foreground">No data.</TableCell></TableRow>}
+      </TableBody>
+    </Table>
+  )
+}
 
 function DayBars({ days, cap }: { days: { day: string; cost: number; runs: number }[]; cap: number }) {
   if (days.length === 0) return <p className="text-muted-foreground">No spending recorded in the last 30 days.</p>
@@ -58,6 +84,70 @@ export function Costs() {
         <h2 className="mb-3 text-xl font-semibold">Last 30 days</h2>
         <DayBars days={c.by_day} cap={c.daily_cap} />
       </section>
+
+      <section className="mt-10">
+        <h2 className="mb-1 text-xl font-semibold">Tokens and cost by stage and model</h2>
+        <p className="mb-2 text-sm text-muted-foreground">Cache read is re-reading the conversation so far (cheap per token, but it adds up with long prompts); cache write is paid once per new piece of context. Above about 100k tokens of context every token costs several times more: keep the peak below it.</p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Stage</TableHead><TableHead>Model</TableHead>
+              <TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Turns</TableHead>
+              <TableHead className="text-right">Input</TableHead><TableHead className="text-right">Output</TableHead>
+              <TableHead className="text-right">Cache read</TableHead><TableHead className="text-right">Cache write</TableHead>
+              <TableHead className="text-right">Peak context</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Per session</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {c.by_stage_model.map((r) => (
+              <TableRow key={`${r.kind}-${r.model}`}>
+                <TableCell>{label(r.kind)}</TableCell>
+                <TableCell>{shortModel(r.model)}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.sessions}</TableCell>
+                {r.untracked >= r.sessions
+                  ? <TableCell colSpan={5} className="text-right text-muted-foreground">tokens not recorded</TableCell>
+                  : [r.turns, r.input, r.output, r.cache_read, r.cache_write].map((v, i) => <TableCell key={i} className="text-right tabular-nums">{i === 0 ? v : tokens(v)}</TableCell>)}
+                <TableCell className={cn("text-right tabular-nums", r.long_context > 0 && "text-lamp-red")} title={r.long_context > 0 ? `${r.long_context} session(s) went over 100k tokens of context, billed at a much higher rate` : undefined}>{r.peak_context > 0 ? tokens(r.peak_context) : "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{money(r.cost)}</TableCell>
+                <TableCell className="text-right tabular-nums">{money(r.cost / Math.max(1, r.sessions))}</TableCell>
+              </TableRow>
+            ))}
+            {c.by_stage_model.length === 0 && <TableRow><TableCell colSpan={11} className="text-muted-foreground">No data.</TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </section>
+
+      <div className="mt-10 grid gap-10 lg:grid-cols-2">
+        <section>
+          <h2 className="mb-2 text-xl font-semibold">Average cost per area</h2>
+          <ByArea rows={c.by_area} />
+        </section>
+        <section>
+          <h2 className="mb-2 text-xl font-semibold">Cost per outcome</h2>
+          <Table>
+            <TableHeader><TableRow><TableHead>Run</TableHead><TableHead>Outcome</TableHead><TableHead className="text-right">Runs</TableHead><TableHead className="text-right">Average</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {c.by_outcome.runs.map((o) => (
+                <TableRow key={`${o.kind}-${o.outcome}`}><TableCell>{label(o.kind)}</TableCell><TableCell>{o.outcome}</TableCell><TableCell className="text-right tabular-nums">{o.runs}</TableCell><TableCell className="text-right tabular-nums">{money(o.avg_cost)}</TableCell><TableCell className="text-right tabular-nums">{money(o.cost)}</TableCell></TableRow>
+              ))}
+              {c.by_outcome.runs.length === 0 && <TableRow><TableCell colSpan={5} className="text-muted-foreground">No data.</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+          {c.by_outcome.tickets.length > 0 && (
+            <>
+              <p className="mb-1 mt-5 text-sm text-muted-foreground">Whole ticket (triage, fixes and retrospective), by how its last fix ended</p>
+              <Table>
+                <TableHeader><TableRow><TableHead>Last fix</TableHead><TableHead className="text-right">Tickets</TableHead><TableHead className="text-right">Average</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {c.by_outcome.tickets.map((o) => (
+                    <TableRow key={o.outcome}><TableCell>{o.outcome}</TableCell><TableCell className="text-right tabular-nums">{o.tickets}</TableCell><TableCell className="text-right tabular-nums">{money(o.avg_cost)}</TableCell><TableCell className="text-right tabular-nums">{money(o.cost)}</TableCell></TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
+          )}
+        </section>
+      </div>
 
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
         <section>

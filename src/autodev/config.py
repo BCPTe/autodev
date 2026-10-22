@@ -51,6 +51,8 @@ class AgentConfig(BaseModel):
     allowed_bash: list[str] = []
     commands: str = ""
     instructions: str = ""
+    user_mcp: bool = False
+    resume_retries: bool = False
 
 
 class Check(BaseModel):
@@ -113,6 +115,9 @@ class Knowledge(BaseModel):
     model: str | None = None
     # Run the retrospective by itself when a ticket is closed (it only proposes; a human accepts).
     auto_propose_on_close: bool = True
+    # The automatic retrospective skips (and does not pay for) a ticket that went smoothly: no person
+    # commented, no checkpoint note or denied request, no retry. A manual "learn" always runs.
+    skip_uneventful: bool = True
 
 
 class ProjectConfig(BaseModel):

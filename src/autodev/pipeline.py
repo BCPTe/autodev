@@ -4,6 +4,7 @@ import httpx
 
 from autodev import knowledge
 from autodev.agents.triage import RunInfo, TriageResult, escalate_risk, run_triage
+from autodev.agents.usage import last_session_id
 from autodev.config import ProjectConfig
 from autodev.control import checkpoint
 from autodev.models import Risk, Status, Ticket
@@ -52,7 +53,7 @@ def format_comment(result: TriageResult, risk: str, runs: list[RunInfo]) -> str:
         lines += ["", f"Suggested test: {result.suggested_test}"]
     if result.playbook_cited:
         lines += ["", "Playbook entries used: " + ", ".join(result.playbook_cited)]
-    lines += ["", "Run: " + " -> ".join(f"{r.model} ({r.turns} turns, ${r.cost_usd:.2f})" for r in runs)]
+    lines += ["", "Run: " + " -> ".join(f"{r.model} ({r.turns} turns, ${r.cost_usd:.2f}{', failed' if r.failed else ''})" for r in runs)]
     return "\n".join(lines)
 
 
@@ -242,14 +243,17 @@ async def _fix_in_workspace(
             progress = Progress(f"fix {attempt}/{cfg.limits.max_attempts} {model.replace('claude-', '')}", report) if report else None
             if progress:
                 progress("starting")
+            resume = last_session_id("fix") if cfg.agents["fix"].resume_retries and failure else None
             fix, spent, turns = await run_fix(
                 cfg, ticket, ws, triage_notes, failure,
                 budget_usd=remaining_budget(cfg, ticket, cost), model=model, progress=progress, playbook=playbook,
+                **({"resume": resume} if resume else {}),
             )
             stats["turns"] += turns
             if progress:
                 progress(f"done: {fix.outcome}, {turns} turns, ${spent:.2f}")
         except Exception as e:
+            cost += getattr(e, "cost_usd", 0.0)
             await _escalate(tracker, ticket, f"fix agent failed: {e}", cost, ws.branch)
             return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, message=str(e))
         cost += spent

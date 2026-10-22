@@ -110,11 +110,14 @@ def seed(db: Database) -> int:
     def ev(rid, ts, typ, text):
         db.execute("INSERT INTO events(run_id, ts, type, text) VALUES(?,?,?,?)", (rid, ts, typ, text))
 
-    r1 = run()
+    def usage(stage, model, cost, **kw):
+        return __import__("json").dumps([{"stage": stage, "model": model, "session_id": "s", "turns": 8, "input": 12, "output": 2400, "cache_read": 180000, "cache_write": 21000, "cost_usd": cost, "duration_s": 90, "tools": {"Grep": 5, "Read": 3}, "tool_result_chars": 9000, "largest_result_chars": 3000, "denials": 0, "resumed": False, "error": False, **kw}])
+
+    r1 = run(usage=usage("triage", "claude-haiku-5-5", 0.17))
     for i, line in enumerate(["[0:04] haiku: avvio analisi", "[0:09] haiku:  1. legge data/knowledge_base/scia_sue_calabria_fields.json", "[0:15] haiku:  2. cerca 'required_group' in apps/backend", "[1:20] haiku: done: ready, confidence high, 8 turni, $0.17"]):
         ev(r1, NOW - 3 * 3600 + i * 20, "log", line)
     ev(r1, NOW - 3 * 3600 + 90, "result", "Triage: ready (risk Medium)\n\nThe ticket is clear.\n\nFiles involved:\n- data/knowledge_base/scia_sue_calabria_fields.json")
-    run(kind="fix", status="done", cost_usd=1.62, model="claude-sonnet-5-5", outcome="review", ticket_id="t5", ticket_title="The wizard loses data when step 4 is reloaded", started_at=NOW - 50 * MIN, finished_at=NOW - 30 * MIN, branch="autodev/wizard-perde-dati-a1b2c3")
+    run(kind="fix", status="done", cost_usd=1.62, model="claude-sonnet-5-5", outcome="review", ticket_id="t5", ticket_title="The wizard loses data when step 4 is reloaded", started_at=NOW - 50 * MIN, finished_at=NOW - 30 * MIN, branch="autodev/wizard-perde-dati-a1b2c3", usage=usage("fix", "claude-sonnet-5-5", 1.62, turns=21, cache_read=1400000, cache_write=90000, tools={"Bash": 12, "Read": 4, "Edit": 3}))
     r3 = run(kind="fix", status="failed", cost_usd=0.4, model="claude-sonnet-5-5", outcome=None, ticket_id="t7", ticket_title="Billing: the plan does not update after payment", started_at=NOW - 20 * MIN, finished_at=NOW - 18 * MIN, error="fix agent failed: Bash permission denied")
     ev(r3, NOW - 19 * MIN, "error", "fix agent failed: Bash permission denied")
     live = run(kind="fix", status="running", cost_usd=0, model="claude-sonnet-5-5", outcome=None, ticket_id="t4", ticket_title="Required and dependency fields logic", started_at=NOW - 40, finished_at=None, pid=__import__("os").getpid())

@@ -28,10 +28,12 @@ min_body_chars: 40
 agents:
   triage:
     models: [claude-haiku-5-5, claude-sonnet-5-5]   # cheapest first
-    max_turns: 15
+    max_turns: 25
+    # user_mcp: false                 # keep the account's MCP connectors out of the agent (see docs/COSTS.md)
   fix:
     models: [claude-sonnet-5-5, claude-opus-5-5]
-    max_turns: 40
+    max_turns: 30
+    # resume_retries: false           # a retry continues the previous session instead of starting over
     allowed_bash:                     # runs without asking; run from the repo root
       - "{python} -m pytest"
       - "git status"
@@ -79,3 +81,4 @@ knowledge:                            # the playbook agents read; see docs/CONFI
   max_chars: 6000                     # most playbook text put in one prompt
   # model: claude-haiku-5-5           # retrospective agent; default: the first triage model
   auto_propose_on_close: true         # propose entries when a PR is merged (a human accepts them)
+  skip_uneventful: true               # ...but not for a ticket that went smoothly (saves the retrospective run)

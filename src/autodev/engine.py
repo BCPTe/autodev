@@ -90,14 +90,15 @@ def publish_job(cfg: ProjectConfig, tracker, ticket: Ticket):
     return work, summarize
 
 
-def learn_job(cfg: ProjectConfig, tracker, ticket: Ticket, db: Database, project: str):
+def learn_job(cfg: ProjectConfig, tracker, ticket: Ticket, db: Database, project: str, auto: bool = False):
     async def work(report: Report):
-        return await learn_ticket(cfg, tracker, db, project, ticket, report)
+        return await learn_ticket(cfg, tracker, db, project, ticket, report, skip_uneventful=auto and cfg.knowledge.skip_uneventful)
 
     def summarize(o) -> RunSummary:
         return RunSummary(
-            outcome="proposed" if o.saved else "nothing_to_learn", cost_usd=o.cost_usd, model=o.model,
-            result_text="\n".join(f"- {t}" for t in o.texts) or "Nothing worth adding to the playbook.", extra={"turns": o.turns},
+            outcome="proposed" if o.saved else "skipped" if o.skipped else "nothing_to_learn", cost_usd=o.cost_usd, model=o.model,
+            result_text="\n".join(f"- {t}" for t in o.texts) or ("Skipped: the ticket went smoothly." if o.skipped else "Nothing worth adding to the playbook."),
+            extra={"turns": o.turns},
         )
 
     return work, summarize
@@ -275,9 +276,9 @@ class Engine:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _execute(self, ticket: Ticket, kind: str) -> None:
+    async def _execute(self, ticket: Ticket, kind: str, auto: bool = False) -> None:
         if kind == "learn":
-            work, summarize = learn_job(self.cfg, self.tracker, ticket, self.db, self.project)
+            work, summarize = learn_job(self.cfg, self.tracker, ticket, self.db, self.project, auto)
         else:
             job = {"triage": triage_job, "fix": fix_job, "checks": checks_job, "publish": publish_job}[kind]
             work, summarize = job(self.cfg, self.tracker, ticket)
@@ -339,7 +340,7 @@ class Engine:
             ticket = self._learn_queue.pop(ticket_id)
             self._launching = True
             self.db.audit("auto", "start_learn", ticket.id, ticket.title)
-            task = asyncio.ensure_future(self._execute(ticket, "learn"))
+            task = asyncio.ensure_future(self._execute(ticket, "learn", auto=True))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
             return

@@ -1,10 +1,11 @@
+from dataclasses import replace
 from typing import Literal
 
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
 from autodev import knowledge
-from autodev.agents.session import run_session
+from autodev.agents.session import isolation, run_session
 from autodev.config import ProjectConfig
 from autodev.models import Ticket
 from autodev.progress import Progress
@@ -34,6 +35,14 @@ commands with `cd` or `&&`.
 
 If the problem cannot be reproduced or fixed with confidence, change nothing and report `cannot_fix` with the \
 reason: a wrong fix is worse than none. Write `summary` and `notes` in {language}, concise."""
+
+
+class FixFailed(RuntimeError):
+    """A session that ended without a result (turn cap, budget cap, error); it still cost what it used."""
+
+    def __init__(self, message: str, cost_usd: float):
+        super().__init__(message)
+        self.cost_usd = cost_usd
 
 
 class FixResult(BaseModel):
@@ -73,14 +82,16 @@ This branch already contains work from an earlier run (do not redo it):
 {history}
 </branch_history>"""
     if previous_failure:
-        text += f"""
+        text += "\n\n" + _feedback(previous_failure)
+    return text
 
-Your previous attempt was not accepted (verification failed, or a human reviewer asked for changes). \
+
+def _feedback(previous_failure: str) -> str:
+    return f"""Your previous attempt was not accepted (verification failed, or a human reviewer asked for changes). \
 Address the points below in the existing working tree (your earlier changes are still there):
 <feedback>
 {previous_failure}
 </feedback>"""
-    return text
 
 
 def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", instructions: str = "", playbook: knowledge.Playbook | None = None) -> str:
@@ -125,6 +136,7 @@ async def run_fix(
     model: str | None = None,
     progress: Progress | None = None,
     playbook: knowledge.Playbook | None = None,
+    resume: str | None = None,
 ) -> tuple[FixResult, float, int]:
     agent = cfg.agents["fix"]
     bash = [f"Bash({expand(p, cfg)}:*)" for p in agent.allowed_bash]
@@ -139,6 +151,7 @@ async def run_fix(
         max_turns=agent.max_turns,
         max_budget_usd=budget_usd or cfg.limits.budget_usd_per_ticket,
         output_format={"type": "json_schema", "schema": FixResult.model_json_schema()},
+        **isolation(agent.user_mcp),
     )
     def on_message(message) -> None:
         if progress and isinstance(message, AssistantMessage):
@@ -146,7 +159,14 @@ async def run_fix(
                 if isinstance(block, ToolUseBlock):
                     progress.tool(block.name, block.input, str(ws.path))
 
-    message = await run_session(_prompt(ticket, triage_notes, previous_failure, ws.history()), options, on_message)
+    full_prompt = _prompt(ticket, triage_notes, previous_failure, ws.history())
+    if resume and previous_failure:
+        try:
+            message = await run_session(_feedback(previous_failure), replace(options, resume=resume), on_message, "fix")
+        except Exception:
+            message = await run_session(full_prompt, options, on_message, "fix")
+    else:
+        message = await run_session(full_prompt, options, on_message, "fix")
     if message.is_error or message.structured_output is None:
-        raise RuntimeError(f"fix agent failed: {message.subtype} {message.errors or message.result}")
+        raise FixFailed(f"fix agent failed: {message.subtype} {message.errors or message.result}", message.total_cost_usd or 0.0)
     return FixResult.model_validate(message.structured_output), message.total_cost_usd or 0.0, message.num_turns
