@@ -138,4 +138,4 @@ async def test_checks_the_token_cannot_read_are_unknown_not_absent(project, monk
     respx.get(f"{base}/commits/abc/status").mock(return_value=httpx.Response(403, json={"message": "Resource not accessible"}))
     respx.get(f"{base}/pulls/1").mock(return_value=httpx.Response(200, json={"mergeable": True}))
     prs = await github.list_pulls(project, "autodev")
-    assert prs[0]["checks"]["verdict"] == "unknown" and "Checks" in prs[0]["checks"]["reason"]
+    assert prs[0]["checks"]["verdict"] == "unknown" and "Checks" in prs[0]["checks"]["reason"] and "Commit statuses" in prs[0]["checks"]["reason"]

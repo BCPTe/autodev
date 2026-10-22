@@ -65,7 +65,8 @@ async def verify_access(cfg: ProjectConfig) -> str:
             runs = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/commits/{sha}/check-runs", headers=headers, params={"per_page": 1})
             statuses = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/commits/{sha}/status", headers=headers)
         if sha and (runs.status_code != 200 or statuses.status_code != 200):
-            return "the token cannot read CI results: add 'Checks' and 'Commit statuses' (read), otherwise PRs show unknown checks and cannot be merged from the dashboard"
+            missing = " and ".join(n for n, r in (("'Checks'", runs), ("'Commit statuses'", statuses)) if r.status_code != 200)
+            return f"the token lacks the {missing} permission (read): without it PRs show unknown checks and cannot be merged from the dashboard"
         prs = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/pulls", headers=headers, params={"per_page": 1})
         if prs.status_code != 200:
             return f"the token sees the repository but cannot read pull requests ({prs.status_code}): it needs the 'Pull requests' permission"
@@ -115,9 +116,12 @@ async def list_pulls(cfg: ProjectConfig, branch_prefix: str, limit: int = 30) ->
                 status = await client.get(_api(cfg, f"/commits/{sha}/status"))
                 if runs.status_code != 200 or status.status_code != 200:
                     # Never read "cannot see them" as "there are none": merging would skip failing checks.
+                    missing = " and ".join(
+                        name for name, r in (("'Checks'", runs), ("'Commit statuses'", status)) if r.status_code != 200
+                    )
                     item["checks"] = {
                         "verdict": "unknown", "total": 0, "failed": 0, "pending": 0,
-                        "reason": "the token cannot read checks: give it 'Checks' and 'Commit statuses' (read)",
+                        "reason": f"the token lacks the {missing} permission (read)",
                     }
                 else:
                     item["checks"] = _checks_summary(runs.json().get("check_runs", []), status.json().get("statuses", []))

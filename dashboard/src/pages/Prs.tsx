@@ -15,12 +15,12 @@ const STATE: Record<Pr["state"], { label: string; lamp: LampKind }> = {
   merged: { label: "Merged", lamp: "violet" },
   closed: { label: "Closed", lamp: "idle" },
 }
-const CHECKS = { none: "No checks on GitHub", unknown: "Checks unreadable (token permissions)", passing: "Checks passed", failing: "Checks failed", pending: "Checks running" } as const
+const CHECKS = { none: "No checks on GitHub", unknown: "Checks unreadable", passing: "Checks passed", failing: "Checks failed", pending: "Checks running" } as const
 
 function mergeBlocker(p: Pr): string | null {
   if (p.draft) return "It is a draft"
   if (p.checks?.verdict === "failing") return "The checks on GitHub failed"
-  if (p.checks?.verdict === "unknown") return "Checks cannot be read with this token: merge on GitHub, or give the token 'Checks' and 'Commit statuses' (read)"
+  if (p.checks?.verdict === "unknown") return `Checks cannot be read: ${p.checks.reason ?? "check the token permissions"}`
   if (p.checks?.verdict === "pending") return "The checks on GitHub are still running"
   if (p.mergeable === false) return "There are conflicts with the base branch"
   if (p.ticket?.risk === "High") return "High risk: merge it by hand on GitHub after reading it"
