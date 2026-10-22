@@ -36,8 +36,9 @@ class FakeTracker:
         for k, v in kw.items():
             setattr(t, k, v)
 
-    async def comment(self, ticket_id, text, *, as_human=False):
+    async def comment(self, ticket_id, text, *, as_human=False, author=None):
         self.posted = getattr(self, "posted", []) + [(ticket_id, text, as_human)]
+        self.authors = getattr(self, "authors", []) + [author]
 
     async def detail(self, ticket_id):
         t = next(t for t in self.tickets if t.id == ticket_id)

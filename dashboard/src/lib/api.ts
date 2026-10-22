@@ -88,6 +88,7 @@ export interface Control {
   quiet: boolean
   notifications: boolean
   can_notify: boolean
+  permission_policy: "ask" | "trusted"
 }
 
 export interface TicketAction {
@@ -258,5 +259,5 @@ export interface Config {
   has_checks: boolean
   never_automerge: string[]
   daily_cap_effective: number
-  autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[]; checkpoints: ("after_agent" | "before_pr")[] }
+  autonomy: { default_mode: Mode; poll_seconds: number; retry_cooldown_seconds: number; auto_approve_risks: string[]; permission_policy: "ask" | "trusted"; checkpoints: ("after_agent" | "before_pr")[] }
 }

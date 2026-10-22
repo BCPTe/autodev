@@ -46,6 +46,27 @@ function QuietHours({ current }: { current: string | null }) {
   )
 }
 
+function PermissionPolicy({ current }: { current: "ask" | "trusted" }) {
+  const { act, pending } = useAct()
+  return (
+    <div className="space-y-1">
+      <select
+        aria-label="Command permissions"
+        className="h-8 rounded-md border bg-background px-2 text-sm"
+        value={current}
+        disabled={pending}
+        onChange={(e) => act(() => put("/api/control", { permission_policy: e.target.value }), "Command permissions updated")}
+      >
+        <option value="ask">Ask for every command outside the allowed list</option>
+        <option value="trusted">Allow ordinary commands, ask only for destructive ones</option>
+      </select>
+      <p className="text-xs text-muted-foreground">
+        Destructive commands (rm -rf, git push, git reset --hard, sudo, reading .env or ~/.ssh, writes outside the project...) always need you; in Auto mode they are refused. Switching mode does not change this.
+      </p>
+    </div>
+  )
+}
+
 function Notifications({ server, canNotify }: { server: boolean; canNotify: boolean }) {
   const { act, pending } = useAct()
   const [browser, setBrowser] = useState(browserNotificationsOn())
@@ -86,6 +107,7 @@ export function Settings() {
           <Row label="Check frequency">Every {c.autonomy.poll_seconds} seconds (in Auto and Supervised)</Row>
           <Row label="Retry after an error">After {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minutes, or by hand</Row>
           <Row label="Pauses for your approval">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "after the agent, before verification" : "before the pull request")).join("; ") + " (not in Auto mode)" : "None"}</Row>
+          <Row label="Command permissions">{control && <PermissionPolicy current={control.permission_policy} />}</Row>
           <Row label="Quiet hours">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
           <Row label="Notifications">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
           <Row label="Daily cap"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>

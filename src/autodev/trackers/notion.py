@@ -178,12 +178,16 @@ class NotionTracker:
         c = self._cfg
         await self._patch(ticket_id, {c.prop("status"): {"status": {"name": self._cfg.status_map[status]}}})
 
-    async def comment(self, ticket_id: str, text: str, *, as_human: bool = False) -> None:
-        text = HUMAN_PREFIX + text if as_human else text
-        r = await self._client.post(
-            "/comments",
-            json={"parent": {"page_id": ticket_id}, "rich_text": _rich(text)["rich_text"]},
-        )
+    async def comment(self, ticket_id: str, text: str, *, as_human: bool = False, author: str | None = None) -> None:
+        """A comment typed by a person goes through the integration, so Notion would show it as written by
+        the bot: it gets a custom display name (the person's), and a text marker as a fallback."""
+        body = {"parent": {"page_id": ticket_id}, "rich_text": _rich(HUMAN_PREFIX + text if as_human else text)["rich_text"]}
+        if as_human and author:
+            named = {**body, "rich_text": _rich(text)["rich_text"], "display_name": {"type": "custom", "custom": {"name": author}}}
+            r = await self._client.post("/comments", json=named)
+            if r.status_code < 400:
+                return
+        r = await self._client.post("/comments", json=body)
         r.raise_for_status()
 
     async def update(

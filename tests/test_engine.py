@@ -30,7 +30,7 @@ class Tracker:
         for k, v in kw.items():
             setattr(self.tickets[ticket_id], {"agent_note": "agent_note", "cost_usd": "cost_usd"}.get(k, k), v)
 
-    async def comment(self, ticket_id, text, *, as_human=False):
+    async def comment(self, ticket_id, text, *, as_human=False, author=None):
         self.comments.append((ticket_id, text, as_human))
 
 

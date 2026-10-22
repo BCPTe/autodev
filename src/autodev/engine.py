@@ -153,6 +153,17 @@ class Engine:
         self.db.audit(actor, "quiet_hours", detail=spec or "off")
 
     @property
+    def permission_policy(self) -> str:
+        value = self.db.get_setting(self._k("permission_policy"))
+        return value if value in ("ask", "trusted") else self.cfg.autonomy.permission_policy
+
+    def set_permission_policy(self, policy: str, actor: str = "user") -> None:
+        if policy not in ("ask", "trusted"):
+            raise ValueError("permission policy must be 'ask' or 'trusted'")
+        self.db.set_setting(self._k("permission_policy"), policy)
+        self.db.audit(actor, "permission_policy", detail=policy)
+
+    @property
     def notifications(self) -> bool:
         return self.db.get_setting(self._k("notifications"), "1") == "1"
 
@@ -191,6 +202,7 @@ class Engine:
             "quiet_hours": self.quiet_hours,
             "quiet": in_quiet_hours(self.quiet_hours, self._clock()),
             "notifications": self.notifications,
+            "permission_policy": self.permission_policy,
             "can_notify": notify.resolve_command(self.cfg.autonomy.notify_command) is not None,
             "poll_seconds": poll,
             "next_check": (self._last_tick + poll) if self._last_tick and self.mode in ("auto", "supervised") else None,
@@ -245,7 +257,7 @@ class Engine:
         work, summarize = job(self.cfg, self.tracker, ticket)
         if kind != "checks":
             self._tried[(ticket.id, ticket.status.value)] = self._clock()
-        control = RunControl(self.db, lambda: self.mode, self.notify)
+        control = RunControl(self.db, lambda: self.mode, self.notify, lambda: self.permission_policy)
         current_control.set(control)
         try:
             result = await run_tracked(

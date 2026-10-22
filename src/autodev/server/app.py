@@ -19,6 +19,7 @@ from autodev.server import auth as authmod
 from autodev.server.auth import COOKIE, Auth
 from autodev import github
 from autodev.server import repo as repomod
+from autodev.sandbox.workspace import identity_flags
 from autodev.server.repo import RepoError, repo_state
 
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "testserver"}
@@ -44,6 +45,7 @@ class Control(BaseModel):
     daily_budget_usd: float | None = None
     quiet_hours: str | None = None
     notifications: bool | None = None
+    permission_policy: str | None = None
 
 
 class TicketEdit(BaseModel):
@@ -257,6 +259,8 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
                 engine.set_quiet_hours(body.quiet_hours.strip())
             if body.notifications is not None:
                 engine.set_notifications(body.notifications)
+            if body.permission_policy is not None:
+                engine.set_permission_policy(body.permission_policy)
         except ValueError as e:
             raise HTTPException(422, str(e))
         return engine.state()
@@ -342,13 +346,22 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         cache["at"] = 0.0
         return {"ok": True}
 
+    def comment_author() -> str | None:
+        """Notion shows comments posted through an integration under its name; this label says who really wrote it."""
+        if cfg.autonomy.comment_author:
+            return cfg.autonomy.comment_author
+        try:
+            return identity_flags(cfg)[1].split("=", 1)[1]
+        except RuntimeError:
+            return None
+
     @r.post("/tickets/{ticket_id}/comment", dependencies=[Depends(require_session)])
     async def add_comment(ticket_id: str, body: CommentBody):
         text = body.text.strip()
         if not text:
             raise HTTPException(422, "the comment is empty")
         try:
-            await tracker.comment(ticket_id, text, as_human=True)
+            await tracker.comment(ticket_id, text, as_human=True, author=comment_author())
         except Exception as e:
             raise HTTPException(502, f"Notion did not accept the comment: {e}")
         db.audit("user", "comment", ticket_id, text[:200])

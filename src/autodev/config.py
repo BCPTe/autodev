@@ -94,6 +94,11 @@ class Autonomy(BaseModel):
     notify_command: list[str] | None = None
     # When a pull request is merged, also delete its local branch.
     auto_cleanup_branches: bool = False
+    # "ask": the agent asks for every command outside `allowed_bash`. "trusted": ordinary commands run
+    # without asking; destructive ones (rm -rf, git push, sudo, ...) always need a human.
+    permission_policy: Literal["ask", "trusted"] = "ask"
+    # Name shown on Notion comments written from the dashboard (default: your git user name).
+    comment_author: str | None = None
 
 
 class ProjectConfig(BaseModel):

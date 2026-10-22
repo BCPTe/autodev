@@ -154,3 +154,30 @@ async def test_a_status_label_missing_from_the_project_file_is_an_error_not_an_e
     with pytest.raises(RuntimeError, match="status_map"):
         await tracker.list_all()
     await tracker.aclose()
+
+
+@respx.mock
+async def test_a_comment_from_the_dashboard_carries_the_persons_name_instead_of_the_bots():
+    import json
+
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    posted = respx.post(f"{API}/comments").mock(return_value=httpx.Response(200, json={}))
+    tracker = NotionTracker(cfg.tracker, token="x")
+    await tracker.comment("page-1", "Only the SCIA SUE", as_human=True, author="Christian")
+    body = json.loads(posted.calls.last.request.content)
+    assert body["display_name"] == {"type": "custom", "custom": {"name": "Christian"}}
+    assert body["rich_text"][0]["text"]["content"] == "Only the SCIA SUE"  # no visible marker when the name is accepted
+    await tracker.aclose()
+
+
+@respx.mock
+async def test_if_notion_refuses_the_custom_name_the_comment_still_goes_out_marked_as_human():
+    import json
+
+    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    route = respx.post(f"{API}/comments").mock(side_effect=[httpx.Response(400, json={}), httpx.Response(200, json={})])
+    tracker = NotionTracker(cfg.tracker, token="x")
+    await tracker.comment("page-1", "Hello", as_human=True, author="Christian")
+    assert route.call_count == 2
+    assert json.loads(route.calls.last.request.content)["rich_text"][0]["text"]["content"] == "[dashboard] Hello"
+    await tracker.aclose()

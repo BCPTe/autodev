@@ -51,7 +51,7 @@ First target: Acme (`projects/demo.yaml`).
 
 Runs started from the dashboard are interactive (runs started with `autodev triage|fix` in a terminal are not):
 - **Message:** writing to a running agent interrupts what it is doing and gives it your text as the next turn, keeping its whole context. **Pause** interrupts and waits for your next message.
-- **Permissions:** when an agent tries something outside its allowed commands, the run waits and the request shows up under "Da te" (allow once, allow for this run, or deny with a reason the agent reads). In Auto mode nobody is asked and the request is denied.
+- **Permissions:** `autonomy.permission_policy` (also in Settings) is `ask` (every command outside `allowed_bash` waits for you) or `trusted` (ordinary commands run; destructive ones such as `rm -rf`, `git push`, `sudo`, `.env`/`~/.ssh` access and writes outside the project always wait, and are refused in Auto mode). Switching between Manual and Supervised does not change this. A waiting request shows up under "Needs your attention": allow once, allow this program for the run (never a destructive use), stop asking for ordinary commands, or deny with a reason the agent reads.
 - **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
 - Finished runs cannot be resumed with a chat yet.
 

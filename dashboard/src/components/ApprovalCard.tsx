@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { Check, ShieldQuestion, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAct } from "@/hooks/useAct"
-import { post, type Approval } from "@/lib/api"
+import { post, put, type Approval } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { KIND_LABEL } from "@/lib/status"
 
@@ -63,7 +63,16 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
         ) : (
           <>
             <Button size="sm" disabled={pending} onClick={() => decide("allow", "Allowed")}><Check /> Allow</Button>
-            <Button size="sm" variant="outline" disabled={pending} onClick={() => decide("allow_run", "Allowed for this run")}>Allow for this run</Button>
+            <Button size="sm" variant="outline" disabled={pending} title="Allows this program (python3, sed, grep...) for the rest of this run, except destructive uses" onClick={() => decide("allow_run", "Allowed for this run")}>Allow this program for this run</Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              title="Stops asking for ordinary commands in this project; destructive ones (rm -rf, git push, sudo...) still ask. Change it in Settings"
+              onClick={async () => { await put("/api/control", { permission_policy: "trusted" }); await decide("allow", "Ordinary commands are now allowed automatically") }}
+            >
+              Stop asking for ordinary commands
+            </Button>
           </>
         )}
         {denying ? (

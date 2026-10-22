@@ -79,6 +79,8 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | `checkpoints` | Where a run waits for you (never in Auto): `after_agent`, `before_pr` (default). |
 | `quiet_hours` | `"22:00-07:00"` local time: nothing starts by itself. |
 | `notify_command` | Desktop notifier as an argument list with `{title}` and `{body}`. Default: `notify-send` if installed. |
+| `permission_policy` | `ask` (default) or `trusted`: whether ordinary shell commands outside `allowed_bash` need your approval. Destructive ones always do. |
+| `comment_author` | Name shown on Notion comments written from the dashboard (default: your git user name). |
 | `auto_cleanup_branches` | Delete the local branch when its PR is merged. |
 
 ### Present in the file but not used by the code

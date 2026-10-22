@@ -8,6 +8,7 @@ whole context, and your message becomes its next turn. That keeps every turn wel
 """
 import asyncio
 import json
+import re
 from contextvars import ContextVar
 from typing import Any, Callable
 
@@ -22,17 +23,46 @@ current_control: ContextVar["RunControl | None"] = ContextVar("current_control",
 DENIED_IN_AUTO = "Permission not granted: in Auto mode nobody answers requests. Find another way."
 
 
-def remember_key(tool: str, tool_input: dict[str, Any]) -> str:
-    """What 'allow for this run' means: the tool, and for Bash its first two words (e.g. 'git status')."""
+DENIED_DANGEROUS = "Permission not granted: this command can destroy work or leave the project, and nobody can approve it in Auto mode."
+
+_DANGEROUS = [re.compile(p) for p in (
+    r"\brm\s+(-\w*[rf]\w*|--recursive|--force)",
+    r"\bsudo\b", r"\bsu\s", r"\b(dd|mkfs\w*|shutdown|reboot|halt|kill|killall|pkill)\b",
+    r"\bgit\s+(push|reset\s+--hard|clean|checkout\s+--|checkout\s+-f|branch\s+-[dD]|rebase|stash\s+(drop|clear)|remote\s+(add|set-url))",
+    r"\bchmod\s+-R|\bchown\b", r"(curl|wget)[^|;]*\|\s*(sudo\s+)?(ba|z)?sh",
+    r"\b(npm|pnpm|yarn)\s+(publish|login)", r"\bpip\s+install\b.*--break-system",
+    r"\bdocker\s+(rm|rmi|system|volume\s+(rm|prune)|compose\s+(down|rm))", r">\s*/(dev|etc|usr|var|boot)/",
+    r"(\.ssh|\.aws|\.gnupg|/etc/(passwd|shadow))", r"\.env\b",
+)]
+
+
+def is_dangerous(tool: str, tool_input: dict[str, Any], cwd: str = "") -> bool:
+    """Commands that never run without a human, whatever the policy: they destroy work or leave the project."""
     if tool == "Bash":
-        return "Bash:" + " ".join(str(tool_input.get("command", "")).split()[:2])
+        command = str(tool_input.get("command", ""))
+        return any(p.search(command) for p in _DANGEROUS)
+    if tool in ("Edit", "Write"):
+        path = str(tool_input.get("file_path", ""))
+        return bool(path) and path.startswith("/") and not (path.startswith(cwd.rstrip("/") + "/") or path.startswith("/tmp/"))
+    return False
+
+
+def remember_key(tool: str, tool_input: dict[str, Any]) -> str:
+    """What 'allow for this run' means: the tool, and for Bash the program (python3, sed, grep...)."""
+    if tool == "Bash":
+        words = str(tool_input.get("command", "")).split()
+        return "Bash:" + (words[0] if words else "")
     return tool
 
 
 class RunControl:
-    def __init__(self, db: Database, mode: Callable[[], str], notify: Callable[[str, str], None] | None = None):
+    def __init__(
+        self, db: Database, mode: Callable[[], str], notify: Callable[[str, str], None] | None = None,
+        policy: Callable[[], str] | None = None,
+    ):
         self.db = db
         self.mode = mode
+        self.policy = policy or (lambda: "ask")
         self.notify = notify or (lambda title, body: None)
         self.run_id: int | None = None
         self.client: Any = None
@@ -121,10 +151,13 @@ class RunControl:
         return True
 
     async def can_use_tool(self, tool: str, tool_input: dict[str, Any], context: Any):
+        dangerous = is_dangerous(tool, tool_input, self.cwd)
+        if self.policy() == "trusted" and not dangerous:
+            return PermissionResultAllow(updated_input=tool_input)
         if self.mode() == "auto":
-            return PermissionResultDeny(message=DENIED_IN_AUTO)
+            return PermissionResultDeny(message=DENIED_DANGEROUS if dangerous else DENIED_IN_AUTO)
         key = remember_key(tool, tool_input)
-        if key in self._remembered:
+        if key in self._remembered and not dangerous:
             return PermissionResultAllow(updated_input=tool_input)
         title = getattr(context, "title", None) or describe_tool(tool, tool_input, self.cwd)
         allowed, note, remember = await self.ask(

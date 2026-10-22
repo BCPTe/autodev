@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils"
 
 export const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "auto", label: "Auto", hint: "Analyses, approves tickets of an allowed risk level and works on them by itself" },
-  { id: "supervised", label: "Supervised", hint: "Analyses and works by itself, but you approve moving a ticket to In progress" },
-  { id: "manual", label: "Manual", hint: "Nothing starts until you press Start" },
+  { id: "supervised", label: "Supervised", hint: "Analyses and works by itself, but you approve moving a ticket to In progress. Command permission prompts work as in Manual" },
+  { id: "manual", label: "Manual", hint: "Nothing starts until you press Start. Command permission prompts follow the policy in Settings" },
   { id: "paused", label: "Paused", hint: "Nothing starts; running jobs finish, or stop them" },
 ]
 
