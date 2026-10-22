@@ -6,11 +6,11 @@ import { toast } from "sonner"
 export function useAct() {
   const qc = useQueryClient()
   const [pending, setPending] = useState(false)
-  const act = async (fn: () => Promise<unknown>, done?: string) => {
+  const act = async (fn: () => Promise<unknown>, done?: string | ((result: unknown) => string)) => {
     setPending(true)
     try {
-      await fn()
-      if (done) toast.success(done)
+      const result = await fn()
+      if (done) toast.success(typeof done === "function" ? done(result) : done)
       await qc.invalidateQueries()
       return true
     } catch (e) {

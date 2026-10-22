@@ -167,3 +167,43 @@ async def test_without_actions_permission_the_pull_request_still_shows_its_statu
     respx.get(f"{base}/pulls/1").mock(return_value=httpx.Response(200, json={"mergeable": True}))
     checks = (await github.list_pulls(project, "autodev"))[0]["checks"]
     assert checks["verdict"] == "passing" and "Actions" in checks["note"]
+
+
+def remote_merge(project, tmp_path, branch):
+    """Someone merges `branch` into main on the remote (as GitHub does) without touching the local checkout."""
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(tmp_path / "origin.git"), str(other)], check=True)
+    for k, v in (("user.name", "o"), ("user.email", "o@o")):
+        git(other, "config", k, v)
+    git(other, "fetch", "-q", "origin", branch)
+    git(other, "merge", "-q", "--no-ff", f"origin/{branch}", "-m", "merge via PR")
+    git(other, "push", "-q", "origin", "main")
+
+
+def test_after_a_merge_the_checkout_leaves_the_merged_branch_and_catches_up(project, tmp_path):
+    agent_branch(project, "autodev/fix-a", "a = 1\n")
+    git(project.local_path, "push", "-q", "origin", "autodev/fix-a")
+    git(project.local_path, "checkout", "-q", "autodev/fix-a")
+    remote_merge(project, tmp_path, "autodev/fix-a")
+    assert repo.return_to_base_after_merge(project, "autodev/fix-a") == "main"
+    assert git(project.local_path, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert "merge via PR" in git(project.local_path, "log", "-1", "--format=%s")
+    assert "autodev/fix-a" not in git(project.local_path, "branch")
+
+
+def test_after_a_merge_nothing_is_touched_when_the_checkout_is_elsewhere_or_dirty(project, tmp_path):
+    agent_branch(project, "autodev/fix-a", "a = 1\n")
+    assert repo.return_to_base_after_merge(project, "autodev/fix-a") is None  # on main, not on the branch
+    git(project.local_path, "checkout", "-q", "autodev/fix-a")
+    (__import__("pathlib").Path(project.local_path) / "wip.txt").write_text("my work")
+    assert repo.return_to_base_after_merge(project, "autodev/fix-a") is None
+    assert git(project.local_path, "rev-parse", "--abbrev-ref", "HEAD") == "autodev/fix-a"
+
+
+def test_going_back_to_the_base_branch_brings_it_up_to_date(project, tmp_path):
+    agent_branch(project, "autodev/fix-a", "a = 1\n")
+    git(project.local_path, "push", "-q", "origin", "autodev/fix-a")
+    remote_merge(project, tmp_path, "autodev/fix-a")
+    git(project.local_path, "checkout", "-q", "autodev/fix-a")
+    repo.checkout(project, "main")
+    assert "merge via PR" in git(project.local_path, "log", "-1", "--format=%s")

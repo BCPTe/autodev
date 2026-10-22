@@ -70,7 +70,7 @@ function PrRow({ p }: { p: Pr }) {
             size="sm"
             disabled={pending || !!blocker}
             title={blocker ?? undefined}
-            onClick={() => (armed ? (setArmed(false), act(() => post(`/api/prs/${p.number}/merge`, { confirm: true }), "Pull request merged")) : (setArmed(true), setTimeout(() => setArmed(false), 4000)))}
+            onClick={() => (armed ? (setArmed(false), act(() => post(`/api/prs/${p.number}/merge`, { confirm: true }), (r) => ((r as { back_on?: string | null }).back_on ? `Pull request merged; checkout back on ${(r as { back_on: string }).back_on}` : "Pull request merged"))) : (setArmed(true), setTimeout(() => setArmed(false), 4000)))}
           >
             <GitMerge /> {armed ? "Confirm: squash and merge" : "Merge"}
           </Button>

@@ -438,7 +438,10 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
         cache["prs_at"] = 0.0
         cache["at"] = 0.0
-        return {"ok": True}
+        back_on = None
+        if not engine.busy():
+            back_on = await asyncio.to_thread(repomod.return_to_base_after_merge, cfg, pr["branch"])
+        return {"ok": True, "back_on": back_on}
 
     def checkout_guard() -> None:
         if engine.busy():

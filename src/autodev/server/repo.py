@@ -97,7 +97,32 @@ def checkout(cfg: ProjectConfig, branch: str) -> str:
     r = _run(path, "checkout", branch)
     if r.returncode != 0:
         raise RepoError(r.stderr.strip() or "checkout failed")
+    if branch == cfg.base_branch:
+        update_base(cfg)
     return branch
+
+
+def update_base(cfg: ProjectConfig) -> bool:
+    """Fast-forwards the checked-out base branch to origin (best effort: never merges, never overwrites)."""
+    path = Path(cfg.local_path)
+    if _run(path, "fetch", "--quiet", "origin", cfg.base_branch, timeout=120).returncode != 0:
+        return False
+    return _run(path, "merge", "--ff-only", "--quiet", f"origin/{cfg.base_branch}").returncode == 0
+
+
+def return_to_base_after_merge(cfg: ProjectConfig, merged_branch: str) -> str | None:
+    """After a pull request is merged, leaves the merged branch: back on the base branch, brought up to date,
+    and the merged local branch deleted. Does nothing unless the checkout sits on that branch and is clean."""
+    path = Path(cfg.local_path)
+    if _run(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() != merged_branch:
+        return None
+    if _run(path, "status", "--porcelain").stdout.strip():
+        return None
+    if _run(path, "checkout", cfg.base_branch).returncode != 0:
+        return None
+    update_base(cfg)
+    _run(path, "branch", "-D", merged_branch)
+    return cfg.base_branch
 
 
 def removable_branches(cfg: ProjectConfig, pr_merged: set[str] = frozenset()) -> list[str]:
