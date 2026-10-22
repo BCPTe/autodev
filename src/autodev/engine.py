@@ -21,12 +21,13 @@ from autodev.control import RunControl, current_control
 from autodev.db import Database
 from autodev.jobs import DailyCapReached, RunCancelled, RunSummary, daily_cap, run_tracked, spent_today
 from autodev.models import Status, Ticket
-from autodev.pipeline import fix_ticket, triage_ticket
+from autodev.pipeline import fix_ticket, publish_ticket, triage_ticket
 from autodev.progress import Report
 
 MODES = ("auto", "supervised", "manual", "paused")
 TRIAGE_FROM = {Status.NEW, Status.NEEDS_INFO, Status.ANALYZED, Status.ESCALATED}
 FIX_FROM = {Status.IN_PROGRESS}
+PUBLISH_FROM = {Status.IN_PROGRESS, Status.ESCALATED}
 
 
 QUIET_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$")
@@ -68,6 +69,16 @@ def fix_job(cfg: ProjectConfig, tracker, ticket: Ticket):
             branch=o.branch, pr_url=o.pr_url,
             result_text="\n".join([*(c.line() for c in o.checks), o.message]).strip() or None,
         )
+
+    return work, summarize
+
+
+def publish_job(cfg: ProjectConfig, tracker, ticket: Ticket):
+    async def work(report: Report):
+        return await publish_ticket(cfg, tracker, ticket, report=report)
+
+    def summarize(o) -> RunSummary:
+        return RunSummary(outcome=o.status.value, branch=o.branch, pr_url=o.pr_url, result_text="\n".join(c.line() for c in o.checks) or None)
 
     return work, summarize
 
@@ -187,17 +198,17 @@ class Engine:
 
     # ---- starting and stopping jobs ------------------------------------------------------
     async def start(self, ticket_id: str, kind: str, actor: str = "user") -> None:
-        if kind not in ("triage", "fix"):
+        if kind not in ("triage", "fix", "publish"):
             raise Refused(f"unknown job type: {kind}")
         self._check_can_start(actor)
         self._launching = True
         try:
             ticket, _ = await self.tracker.detail(ticket_id)
-            allowed = TRIAGE_FROM if kind == "triage" else FIX_FROM
+            allowed = {"triage": TRIAGE_FROM, "fix": FIX_FROM, "publish": PUBLISH_FROM}[kind]
             if ticket.status not in allowed:
                 raise Refused(
                     f"the ticket is in state '{self.cfg.tracker.status_map[ticket.status]}': "
-                    + ("it needs a ticket that can be analysed" if kind == "triage" else "approve it first (state 'In progress')")
+                    + ("it needs a ticket that can be analysed" if kind == "triage" else "approve it first (state 'In progress')" if kind == "fix" else "only a ticket that was worked on can be published")
                 )
             self.db.audit(actor, f"start_{kind}", ticket.id, ticket.title)
             task = asyncio.ensure_future(self._execute(ticket, kind))
@@ -230,7 +241,7 @@ class Engine:
         task.add_done_callback(self._tasks.discard)
 
     async def _execute(self, ticket: Ticket, kind: str) -> None:
-        job = {"triage": triage_job, "fix": fix_job, "checks": checks_job}[kind]
+        job = {"triage": triage_job, "fix": fix_job, "checks": checks_job, "publish": publish_job}[kind]
         work, summarize = job(self.cfg, self.tracker, ticket)
         if kind != "checks":
             self._tried[(ticket.id, ticket.status.value)] = self._clock()

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Play, RotateCcw, ShieldCheck } from "lucide-react"
+import { GitPullRequest, Play, RotateCcw, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
@@ -26,7 +26,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
 
   const setStatus = (status: TicketState, done: string, extra: object = {}) =>
     act(() => patch(`/api/tickets/${t.id}`, { status, ...extra }), done)
-  const start = (kind: "triage" | "fix", done: string) => act(() => post(`/api/tickets/${t.id}/start`, { kind }), done)
+  const start = (kind: "triage" | "fix" | "publish", done: string) => act(() => post(`/api/tickets/${t.id}/start`, { kind }), done)
   const approveAndStart = async () => {
     if (await setStatus("in_progress", "Approved")) await start("fix", "Fix started")
   }
@@ -60,6 +60,17 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         )}
         {state === "escalated" && (
           <Button size="sm" disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })}><RotateCcw /> Retry (reset attempts)</Button>
+        )}
+        {(state === "in_progress" || state === "escalated") && !t.pr_url && (t.branch || t.attempts > 0) && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending || !!blocked}
+            title={blocked ?? "Opens the pull request for the work already done on the branch (re-runs the checks, no agent)"}
+            onClick={() => start("publish", "Opening the pull request")}
+          >
+            <GitPullRequest /> Open PR
+          </Button>
         )}
         {state === "closed" ? (
           <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("new", "Reopened")}>Reopen</Button>

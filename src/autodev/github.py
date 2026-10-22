@@ -5,6 +5,20 @@ import httpx
 from autodev.config import ProjectConfig
 
 
+def _explain(r: httpx.Response) -> str:
+    """GitHub's own reason, plus the usual cause when a fine-grained token cannot see the branch."""
+    try:
+        data = r.json()
+        detail = "; ".join(str(e.get("message") or e.get("code") or e) for e in data.get("errors", []))
+        text = f"{data.get('message', r.reason_phrase)}" + (f" ({detail})" if detail else "")
+    except ValueError:
+        text = r.text[:300]
+    hint = ""
+    if r.status_code == 422 and "already exists" not in text:
+        hint = " (if the branch is pushed, check that GITHUB_TOKEN has 'Contents: read and write' on the repository)"
+    return f"GitHub refused the request ({r.status_code}): {text}{hint}"
+
+
 async def create_pull_request(cfg: ProjectConfig, branch: str, title: str, body: str) -> str:
     token = os.environ.get("GITHUB_TOKEN")
     if not token or not cfg.pr.slug:
@@ -24,7 +38,8 @@ async def create_pull_request(cfg: ProjectConfig, branch: str, title: str, body:
             )
             existing.raise_for_status()
             return existing.json()[0]["html_url"]
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(_explain(r))
         return r.json()["html_url"]
 
 
@@ -42,6 +57,9 @@ async def verify_access(cfg: ProjectConfig) -> str:
             return f"token invalid or not authorised ({repo.status_code}): check its expiry and that the organisation approved it"
         if repo.status_code == 404:
             return f"repository {cfg.pr.slug} is not visible to the token: select the repository in the token's permissions"
+        branches = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/branches/{cfg.base_branch}", headers=headers)
+        if branches.status_code in (403, 404):
+            return "the token cannot read the repository contents: add the 'Contents' permission (read and write), otherwise opening PRs fails with a 422"
         prs = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/pulls", headers=headers, params={"per_page": 1})
         if prs.status_code != 200:
             return f"the token sees the repository but cannot read pull requests ({prs.status_code}): it needs the 'Pull requests' permission"

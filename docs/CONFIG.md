@@ -9,7 +9,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | Variable | Where to get it |
 |---|---|
 | `NOTION_TOKEN` | notion.so/profile/integrations → **New integration** (internal) → copy the *Internal Integration Secret*. Then open your ticket database in Notion → `···` menu → **Connections** → add the integration, otherwise every call returns 404. The integration needs *read content*, *update content* and *insert comments*. |
-| `GITHUB_TOKEN` | github.com → Settings → Developer settings → Personal access tokens → **Fine-grained**. Resource owner: the owner of the repo (an organization may need to approve it). Repository access: only that repo. Permissions: *Pull requests* read and write, *Contents* read and write (push, delete merged branches), *Checks* read and *Commit statuses* read (CI state on the PR page), *Metadata* read. Only needed when `pr.create` is on or you use the PR page. |
+| `GITHUB_TOKEN` | github.com → Settings → Developer settings → Personal access tokens → **Fine-grained**. Resource owner: the owner of the repo (an organization may need to approve it). Repository access: only that repo. Permissions: *Pull requests* read and write, *Contents* read and write (push, delete merged branches), *Checks* read and *Commit statuses* read (CI state on the PR page), *Metadata* read. Only needed when `pr.create` is on or you use the PR page. Without *Contents* GitHub answers "422 Unprocessable Entity" when a PR is opened (`autodev check` now tells you). |
 | Claude | No key. The agents use the Claude Code login of the user running autodev (`claude` once in a terminal to log in). |
 
 `git push` itself uses your normal git credentials (SSH key or credential helper), not the token.

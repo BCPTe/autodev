@@ -78,7 +78,7 @@ class Message(BaseModel):
 
 
 class StartJob(BaseModel):
-    kind: Literal["triage", "fix"]
+    kind: Literal["triage", "fix", "publish"]
 
 
 class CommentBody(BaseModel):

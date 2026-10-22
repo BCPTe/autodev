@@ -137,7 +137,7 @@ export interface Run {
   project: string
   ticket_id: string
   ticket_title: string
-  kind: "triage" | "fix" | "checks"
+  kind: "triage" | "fix" | "checks" | "publish"
   status: "running" | "done" | "failed" | "cancelled"
   model: string | null
   started_at: number
@@ -174,7 +174,7 @@ export interface Approval {
   created_at: number
   ticket_id: string
   ticket_title: string
-  run_kind: "triage" | "fix" | "checks"
+  run_kind: "triage" | "fix" | "checks" | "publish"
 }
 
 export interface Interactive {
