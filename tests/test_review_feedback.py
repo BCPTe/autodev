@@ -1,0 +1,90 @@
+import pytest
+
+from autodev import pipeline
+from autodev.agents.fix import FixResult
+from autodev.models import Status, Ticket
+from autodev.sandbox import workspace as wsmod
+from tests.fixture_repo import PRICING_FIXED, make_project
+from tests.test_engine import Tracker
+
+REGRESSION_TEST = '''from shop.pricing import apply_discount
+
+
+def test_percent_discount_is_a_percentage_of_the_price():
+    assert apply_discount(200, 25) == 150
+'''
+
+
+async def _empty():
+    return []
+
+
+@pytest.fixture
+def run(tmp_path, monkeypatch):
+    monkeypatch.setattr(wsmod, "WORKSPACES", tmp_path / "workspaces")
+    cfg = make_project(tmp_path)
+    ticket = Ticket(id="abcdef12-0000-0000-0000-000000000000", title="Discount is wrong", status=Status.IN_PROGRESS, body="x" * 100)
+    tracker = Tracker([ticket])
+    tracker.bot_comments = lambda ticket_id: _empty()
+    calls: list[str | None] = []
+
+    async def fake_run_fix(cfg, ticket, ws, notes, previous_failure=None, **kw):
+        calls.append(previous_failure)
+        (ws.path / "shop" / "pricing.py").write_text(PRICING_FIXED)
+        (ws.path / "tests" / "test_discount.py").write_text(REGRESSION_TEST)
+        if previous_failure:
+            (ws.path / "shop" / "extra.py").write_text("EXTRA = True\n")
+        return FixResult(outcome="fixed", summary="done", notes=""), 0.1, 3
+
+    monkeypatch.setattr(pipeline, "run_fix", fake_run_fix)
+    return cfg, ticket, tracker, calls, monkeypatch
+
+
+def decisions(monkeypatch, *answers):
+    queue = list(answers)
+    seen = []
+
+    async def fake_checkpoint(enabled, name, title, detail):
+        seen.append(name)
+        return queue.pop(0)
+
+    monkeypatch.setattr(pipeline, "checkpoint", fake_checkpoint)
+    return seen
+
+
+async def test_rejecting_at_the_pr_checkpoint_with_a_note_sends_the_note_to_the_agent_and_goes_on(run):
+    cfg, ticket, tracker, calls, mp = run
+    seen = decisions(mp, (True, ""), (False, "also add the extra module"), (True, ""), (True, ""))
+    outcome = await pipeline.fix_ticket(cfg, tracker, ticket)
+    assert outcome.status == Status.REVIEW
+    assert len(calls) == 2 and calls[0] is None
+    assert "also add the extra module" in calls[1] and "human reviewer" in calls[1]
+    assert seen == ["after_agent", "before_pr", "after_agent", "before_pr"]
+    assert tracker.tickets[ticket.id].status == Status.REVIEW
+    assert tracker.tickets[ticket.id].verification == "Passed"
+
+
+async def test_rejecting_without_a_note_escalates_but_keeps_the_commit_and_the_verification_result(run):
+    cfg, ticket, tracker, calls, mp = run
+    decisions(mp, (True, ""), (False, ""))
+    outcome = await pipeline.fix_ticket(cfg, tracker, ticket)
+    assert outcome.status == Status.ESCALATED and len(calls) == 1
+    t = tracker.tickets[ticket.id]
+    assert (t.status, t.verification) == (Status.ESCALATED, "Passed")
+    assert wsmod.git(wsmod.WORKSPACES / next((wsmod.WORKSPACES).iterdir()).name, "log", "--oneline", "-1").endswith(f"fix: {ticket.title}")
+
+
+async def test_a_note_on_the_last_attempt_escalates_instead_of_looping_forever(run):
+    cfg, ticket, tracker, calls, mp = run
+    cfg.limits.max_attempts = 2
+    decisions(mp, (True, ""), (False, "change one"), (True, ""), (False, "change two"))
+    outcome = await pipeline.fix_ticket(cfg, tracker, ticket)
+    assert outcome.status == Status.ESCALATED and len(calls) == 2
+
+
+async def test_rejecting_after_the_agent_with_a_note_keeps_the_changes_for_the_next_turn(run):
+    cfg, ticket, tracker, calls, mp = run
+    seen = decisions(mp, (False, "use a clearer name"), (True, ""), (True, ""))
+    outcome = await pipeline.fix_ticket(cfg, tracker, ticket)
+    assert outcome.status == Status.REVIEW and seen == ["after_agent", "after_agent", "before_pr"]
+    assert "use a clearer name" in calls[1]

@@ -74,11 +74,11 @@ This branch already contains work from an earlier run (do not redo it):
     if previous_failure:
         text += f"""
 
-Your previous attempt failed verification. Fix the problems below in the existing working tree \
-(your earlier changes are still there):
-<verification_failure>
+Your previous attempt was not accepted (verification failed, or a human reviewer asked for changes). \
+Address the points below in the existing working tree (your earlier changes are still there):
+<feedback>
 {previous_failure}
-</verification_failure>"""
+</feedback>"""
     return text
 
 

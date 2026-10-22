@@ -159,10 +159,12 @@ def pr_body(ticket: Ticket, fix: FixResult, checks: list[CheckResult], risk: Ris
     return "\n".join(lines)
 
 
-async def _escalate(tracker: Tracker, ticket: Ticket, reason: str, cost: float, branch: str | None = None) -> None:
+async def _escalate(
+    tracker: Tracker, ticket: Ticket, reason: str, cost: float, branch: str | None = None, verification: str | None = "Failed"
+) -> None:
     await _publish(tracker, ticket, f"Fix not completed: {reason}")
     await tracker.update(
-        ticket.id, agent_note=reason, cost_usd=ticket.cost_usd + cost, branch=branch, verification="Failed"
+        ticket.id, agent_note=reason, cost_usd=ticket.cost_usd + cost, branch=branch, verification=verification
     )
     await tracker.set_status(ticket.id, Status.ESCALATED)
 
@@ -260,8 +262,13 @@ async def _fix_in_workspace(
             {"files": files, "summary": fix.summary, "notes": fix.notes},
         )
         if not approved:
+            if note and attempt < cfg.limits.max_attempts:
+                failure = _reviewer_feedback(note)
+                if report:
+                    report("the reviewer asked for changes: the agent continues with the feedback")
+                continue
             ws.discard_changes()
-            await _escalate(tracker, ticket, "change not approved before verification" + (f": {note}" if note else ""), cost, ws.branch)
+            await _escalate(tracker, ticket, "change not approved before verification" + (f": {note}" if note else ""), cost, ws.branch, verification="Not run")
             return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, message="rejected at checkpoint")
 
         ws.commit(f"fix: {ticket.title}\n\nTicket: {_notion_url(ticket.id)}")
@@ -272,7 +279,26 @@ async def _fix_in_workspace(
             for c in checks:
                 report(f"verification: {c.line()}")
         if all(c.ok for c in checks):
-            break
+            risk, flags = _risk_for_changes(cfg, ws, Risk.LOW)
+            files = ws_files_in_head(ws)
+            approved, note = await checkpoint(
+                cfg.autonomy.checkpoints, "before_pr",
+                "Fix verified: open the pull request?" if cfg.pr.create else "Fix verified: mark it for review?",
+                {"files": files, "summary": fix.summary, "checks": [c.line() for c in checks], "risk": risk.value},
+            )
+            if approved:
+                break
+            if not note or attempt >= cfg.limits.max_attempts:
+                await _escalate(
+                    tracker, ticket, "not approved before the pull request" + (f": {note}" if note else ""), cost, ws.branch,
+                    verification="Passed",
+                )
+                return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, checks=checks, message="rejected at checkpoint")
+            failure = _reviewer_feedback(note)
+            if report:
+                report("the reviewer asked for changes: the agent continues with the feedback")
+            git_soft_reset(ws)
+            continue
         failure = "\n\n".join(f"{c.name}:\n{c.output}" for c in checks if not c.ok)
         git_soft_reset(ws)
     else:
@@ -280,17 +306,7 @@ async def _fix_in_workspace(
         return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, checks=checks, message=failure or "")
 
     assert fix is not None
-    risk, flags = _risk_for_changes(cfg, ws, Risk.LOW)
-    files = ws_files_in_head(ws)
     summary = "\n".join(["Checks:", *[f"- {c.line()}" for c in checks], f"Model: {' -> '.join(models_used)}"])
-    approved, note = await checkpoint(
-        cfg.autonomy.checkpoints, "before_pr",
-        "Fix verified: open the pull request?" if cfg.pr.create else "Fix verified: mark it for review?",
-        {"files": files, "summary": fix.summary, "checks": [c.line() for c in checks], "risk": risk.value},
-    )
-    if not approved:
-        await _escalate(tracker, ticket, "not approved before the pull request" + (f": {note}" if note else ""), cost, ws.branch)
-        return FixOutcome(Status.ESCALATED, ws.branch, cost_usd=cost, checks=checks, message="rejected at checkpoint")
 
     if cfg.pr.create:
         ws.push()
@@ -307,6 +323,10 @@ async def _fix_in_workspace(
     await tracker.update(ticket.id, branch=ws.branch, cost_usd=ticket.cost_usd + cost, risk=risk, verification="Passed")
     await tracker.set_status(ticket.id, Status.REVIEW)
     return FixOutcome(Status.REVIEW, ws.branch, None, cost, checks, message=str(ws.path))
+
+
+def _reviewer_feedback(note: str) -> str:
+    return f"A human reviewer rejected the result and asked for this change:\n{note}"
 
 
 def git_soft_reset(ws: Workspace) -> None:
