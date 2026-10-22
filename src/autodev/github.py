@@ -62,11 +62,9 @@ async def verify_access(cfg: ProjectConfig) -> str:
             return "the token cannot read the repository contents: add the 'Contents' permission (read and write), otherwise opening PRs fails with a 422"
         sha = branches.json().get("commit", {}).get("sha", "")
         if sha:
-            runs = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/commits/{sha}/check-runs", headers=headers, params={"per_page": 1})
             statuses = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/commits/{sha}/status", headers=headers)
-        if sha and (runs.status_code != 200 or statuses.status_code != 200):
-            missing = " and ".join(n for n, r in (("'Checks'", runs), ("'Commit statuses'", statuses)) if r.status_code != 200)
-            return f"the token lacks the {missing} permission (read): without it PRs show unknown checks and cannot be merged from the dashboard"
+            if statuses.status_code != 200:
+                return "the token lacks the 'Commit statuses' permission (read): without it PRs show unknown checks and cannot be merged from the dashboard"
         prs = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}/pulls", headers=headers, params={"per_page": 1})
         if prs.status_code != 200:
             return f"the token sees the repository but cannot read pull requests ({prs.status_code}): it needs the 'Pull requests' permission"
@@ -95,6 +93,30 @@ def _checks_summary(runs: list[dict], statuses: list[dict]) -> dict:
     return {"verdict": verdict, "total": len(states), "failed": failed, "pending": pending}
 
 
+async def _ci_summary(client: httpx.AsyncClient, cfg: ProjectConfig, sha: str) -> dict:
+    """CI state of a commit as far as a fine-grained token can see it.
+
+    Fine-grained tokens have no "Checks" permission, so the check-runs API is optional (it works for
+    other token types). What they can read: commit statuses (Vercel, most external CI) and GitHub
+    Actions runs. Statuses are required: not seeing them must not look like "no checks".
+    """
+    status = await client.get(_api(cfg, f"/commits/{sha}/status"))
+    if status.status_code != 200:
+        return {
+            "verdict": "unknown", "total": 0, "failed": 0, "pending": 0,
+            "reason": "the token lacks the 'Commit statuses' permission (read)",
+        }
+    runs = await client.get(_api(cfg, f"/commits/{sha}/check-runs"), params={"per_page": 50})
+    actions = await client.get(_api(cfg, "/actions/runs"), params={"head_sha": sha, "per_page": 50})
+    found = (runs.json().get("check_runs", []) if runs.status_code == 200 else []) + (
+        actions.json().get("workflow_runs", []) if actions.status_code == 200 else []
+    )
+    summary = _checks_summary(found, status.json().get("statuses", []))
+    if actions.status_code != 200 and runs.status_code != 200:
+        summary["note"] = "GitHub Actions results are not visible to the token (optional permission: Actions, read)"
+    return summary
+
+
 async def list_pulls(cfg: ProjectConfig, branch_prefix: str, limit: int = 30) -> list[dict]:
     """Recent pull requests whose branch starts with `branch_prefix`, with check status for the open ones."""
     async with httpx.AsyncClient(timeout=30, headers=_headers()) as client:
@@ -112,19 +134,7 @@ async def list_pulls(cfg: ProjectConfig, branch_prefix: str, limit: int = 30) ->
             }
             if pr["state"] == "open":
                 sha = pr["head"]["sha"]
-                runs = await client.get(_api(cfg, f"/commits/{sha}/check-runs"), params={"per_page": 50})
-                status = await client.get(_api(cfg, f"/commits/{sha}/status"))
-                if runs.status_code != 200 or status.status_code != 200:
-                    # Never read "cannot see them" as "there are none": merging would skip failing checks.
-                    missing = " and ".join(
-                        name for name, r in (("'Checks'", runs), ("'Commit statuses'", status)) if r.status_code != 200
-                    )
-                    item["checks"] = {
-                        "verdict": "unknown", "total": 0, "failed": 0, "pending": 0,
-                        "reason": f"the token lacks the {missing} permission (read)",
-                    }
-                else:
-                    item["checks"] = _checks_summary(runs.json().get("check_runs", []), status.json().get("statuses", []))
+                item["checks"] = await _ci_summary(client, cfg, sha)
                 detail = await client.get(_api(cfg, f"/pulls/{pr['number']}"))
                 if detail.status_code == 200:
                     item["mergeable"] = detail.json().get("mergeable")

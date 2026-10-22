@@ -232,7 +232,7 @@ export interface Pr {
   body: string
   updated_at: string
   author: string
-  checks: { verdict: "none" | "passing" | "failing" | "pending" | "unknown"; total: number; failed: number; pending: number; reason?: string } | null
+  checks: { verdict: "none" | "passing" | "failing" | "pending" | "unknown"; total: number; failed: number; pending: number; reason?: string; note?: string } | null
   mergeable: boolean | null
   ticket: Pick<Ticket, "id" | "title" | "risk" | "verification" | "agent_note" | "status"> | null
 }

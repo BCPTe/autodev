@@ -48,6 +48,7 @@ function PrRow({ p }: { p: Pr }) {
         {p.checks && (
           <div className="flex items-center gap-2"><Lamp kind={p.checks.verdict === "passing" ? "green" : p.checks.verdict === "failing" ? "red" : p.checks.verdict === "pending" || p.checks.verdict === "unknown" ? "amber" : "idle"} className="size-2" />{CHECKS[p.checks.verdict]}</div>
         )}
+        {p.checks?.note && <div className="text-muted-foreground">{p.checks.note}</div>}
         {p.ticket && <div>Risk {p.ticket.risk ?? "—"}</div>}
         {p.ticket?.verification && <div>autodev verification: {p.ticket.verification}</div>}
         {p.mergeable === false && <div className="text-destructive">Conflicts</div>}

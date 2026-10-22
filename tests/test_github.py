@@ -72,10 +72,19 @@ async def test_existing_pull_request_is_reused_instead_of_failing(monkeypatch):
 
 
 @respx.mock
-async def test_a_token_that_cannot_read_ci_results_is_caught_by_the_check(monkeypatch):
+async def test_a_token_that_cannot_read_commit_statuses_is_caught_by_the_check(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     respx.get(REPO).mock(return_value=httpx.Response(200, json={}))
     respx.get(f"{REPO}/branches/{CFG.base_branch}").mock(return_value=httpx.Response(200, json={"commit": {"sha": "abc"}}))
-    respx.get(f"{REPO}/commits/abc/check-runs").mock(return_value=httpx.Response(403))
     respx.get(f"{REPO}/commits/abc/status").mock(return_value=httpx.Response(403))
-    assert "'Checks' and 'Commit statuses'" in await verify_access(CFG)
+    assert "'Commit statuses' permission" in await verify_access(CFG)
+
+
+@respx.mock
+async def test_readable_statuses_are_enough_even_without_check_runs(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "x")
+    respx.get(REPO).mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{REPO}/branches/{CFG.base_branch}").mock(return_value=httpx.Response(200, json={"commit": {"sha": "abc"}}))
+    respx.get(f"{REPO}/commits/abc/status").mock(return_value=httpx.Response(200, json={"statuses": []}))
+    respx.get(f"{REPO}/pulls").mock(return_value=httpx.Response(200, json=[]))
+    assert "GitHub OK" in await verify_access(CFG)
