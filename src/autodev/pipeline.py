@@ -2,6 +2,7 @@ from pathlib import Path
 
 import httpx
 
+from autodev import knowledge
 from autodev.agents.triage import RunInfo, TriageResult, escalate_risk, run_triage
 from autodev.config import ProjectConfig
 from autodev.control import checkpoint
@@ -49,6 +50,8 @@ def format_comment(result: TriageResult, risk: str, runs: list[RunInfo]) -> str:
         lines += ["", "Assumptions to confirm in review (not blocking):", *[f"- {a}" for a in result.assumptions]]
     if result.suggested_test:
         lines += ["", f"Suggested test: {result.suggested_test}"]
+    if result.playbook_cited:
+        lines += ["", "Playbook entries used: " + ", ".join(result.playbook_cited)]
     lines += ["", "Run: " + " -> ".join(f"{r.model} ({r.turns} turns, ${r.cost_usd:.2f})" for r in runs)]
     return "\n".join(lines)
 
@@ -118,6 +121,8 @@ class FixOutcome:
     checks: list[CheckResult] = field(default_factory=list)
     message: str = ""
     models: list[str] = field(default_factory=list)
+    turns: int = 0
+    playbook: list[str] = field(default_factory=list)
 
 
 def _notion_url(ticket_id: str) -> str:
@@ -186,9 +191,14 @@ async def fix_ticket(
         where = f"checkout of {cfg.name or Path(cfg.local_path).name}" if ws.inplace else ws.path.name
         report(f"workspace: {where} ({'resumed, ' + str(len(ws.history().splitlines())) + ' lines of history' if ws.resumed else 'new'}), branch {ws.branch}")
     models_used: list[str] = []
+    stats = {"turns": 0}
+    triage_notes = await tracker.bot_comments(ticket.id)
+    playbook = knowledge.playbook_for(cfg, ticket, "\n".join(triage_notes))
     try:
-        outcome = await _fix_in_workspace(cfg, tracker, ticket, report, ws, models_used)
+        outcome = await _fix_in_workspace(cfg, tracker, ticket, report, ws, models_used, triage_notes, playbook, stats)
         outcome.models = models_used
+        outcome.turns = stats["turns"]
+        outcome.playbook = playbook.ids
         return outcome
     finally:
         _publish_local(cfg, ws, report)
@@ -212,9 +222,8 @@ def _publish_local(cfg: ProjectConfig, ws: Workspace, report: Report | None) -> 
 
 async def _fix_in_workspace(
     cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, report: Report | None, ws: Workspace,
-    models_used: list[str],
+    models_used: list[str], triage_notes: list[str], playbook: knowledge.Playbook, stats: dict,
 ) -> FixOutcome:
-    triage_notes = await tracker.bot_comments(ticket.id)
     cost = 0.0
     failure: str | None = None
     fix: FixResult | None = None
@@ -232,8 +241,9 @@ async def _fix_in_workspace(
                 progress("starting")
             fix, spent, turns = await run_fix(
                 cfg, ticket, ws, triage_notes, failure,
-                budget_usd=remaining_budget(cfg, ticket, cost), model=model, progress=progress,
+                budget_usd=remaining_budget(cfg, ticket, cost), model=model, progress=progress, playbook=playbook,
             )
+            stats["turns"] += turns
             if progress:
                 progress(f"done: {fix.outcome}, {turns} turns, ${spent:.2f}")
         except Exception as e:

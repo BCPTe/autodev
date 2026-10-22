@@ -17,7 +17,7 @@ from autodev.jobs import daily_cap, mark_orphans, spent_today, start_of_today
 from autodev.models import Comment, Status, Ticket
 from autodev.server import auth as authmod
 from autodev.server.auth import COOKIE, Auth
-from autodev import github
+from autodev import github, knowledge
 from autodev.server import repo as repomod
 from autodev.sandbox.workspace import identity_flags
 from autodev.server.repo import RepoError, repo_state
@@ -75,12 +75,19 @@ class Decision(BaseModel):
     note: str = ""
 
 
+class LearningEdit(BaseModel):
+    category: Literal["where", "domain", "gotcha", "command"] | None = None
+    text: str | None = None
+    area: str | None = None
+    paths: list[str] | None = None
+
+
 class Message(BaseModel):
     text: str
 
 
 class StartJob(BaseModel):
-    kind: Literal["triage", "fix", "publish"]
+    kind: Literal["triage", "fix", "publish", "learn"]
 
 
 class CommentBody(BaseModel):
@@ -394,6 +401,59 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             "by_ticket": db.query("SELECT ticket_id, ticket_title AS title, SUM(cost_usd) AS cost, COUNT(*) AS runs FROM runs WHERE project = ? GROUP BY ticket_id ORDER BY cost DESC LIMIT 10", (project,)),
         }
 
+    # ---- playbook ------------------------------------------------------------------------
+    @r.get("/knowledge", dependencies=[Depends(require_session)])
+    def knowledge_state():
+        _, entries = knowledge.load(cfg)
+        usage = knowledge.usage_stats(db, project)
+        proposals = knowledge.list_proposals(db, project)
+        for p in proposals:
+            p["missing_paths"] = knowledge.missing_paths(cfg, p["paths"])
+        return {
+            "enabled": knowledge.enabled(cfg),
+            "file": Path(cfg.knowledge_path).name if cfg.knowledge_path else None,
+            "max_chars": cfg.knowledge.max_chars,
+            "auto_propose_on_close": cfg.knowledge.auto_propose_on_close,
+            "chars": sum(len(e.prompt_line()) + 1 for e in entries),
+            "entries": [
+                {**knowledge.entry_dict(e), "missing_paths": knowledge.missing_paths(cfg, e.paths), **usage.get(e.id, {"uses": 0, "cited": 0, "last_used": None})}
+                for e in entries
+            ],
+            "proposals": proposals,
+            "metrics": knowledge.metrics(db, project),
+        }
+
+    @r.post("/learnings/{learning_id}/accept", dependencies=[Depends(require_session)])
+    def accept_learning(learning_id: int, body: LearningEdit | None = None):
+        if not knowledge.enabled(cfg):
+            raise HTTPException(409, "the playbook is turned off for this project")
+        try:
+            entry = knowledge.accept(db, cfg, project, learning_id, body.model_dump() if body else None)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        db.audit("user", "learning_accept", None, entry.text[:200])
+        return {"ok": True, "entry": knowledge.entry_dict(entry)}
+
+    @r.post("/learnings/{learning_id}/reject", dependencies=[Depends(require_session)])
+    def reject_learning(learning_id: int):
+        try:
+            knowledge.reject(db, project, learning_id)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        db.audit("user", "learning_reject", None, str(learning_id))
+        return {"ok": True}
+
+    @r.delete("/knowledge/entries/{entry_id}", dependencies=[Depends(require_session)])
+    def delete_entry(entry_id: str):
+        if not knowledge.delete_entry(cfg, entry_id):
+            raise HTTPException(404, "entry not found")
+        db.audit("user", "knowledge_delete", None, entry_id)
+        return {"ok": True}
+
     async def pulls(refresh: bool = False) -> list[dict]:
         if not cfg.pr.slug:
             return []
@@ -447,6 +507,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             raise HTTPException(502, f"GitHub refused the merge: {e}")
         if ticket:
             await tracker.set_status(ticket.id, Status.CLOSED)
+            engine.after_close(ticket)
         db.audit("user", "merge", ticket.id if ticket else None, f"PR {number} ({body.method})")
         cache["prs_at"] = 0.0
         cache["at"] = 0.0

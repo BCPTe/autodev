@@ -72,3 +72,10 @@ model_choices:                        # names must equal the options of the Noti
 autonomy:
   default_mode: manual                # manual | supervised | auto | paused
   # quiet_hours: "22:00-07:00"
+
+knowledge:                            # the playbook agents read; see docs/CONFIG.md
+  enabled: true
+  # file: example.knowledge.md        # default: <name>.knowledge.md next to this file
+  max_chars: 6000                     # most playbook text put in one prompt
+  # model: claude-haiku-5-5           # retrospective agent; default: the first triage model
+  auto_propose_on_close: true         # propose entries when a PR is merged (a human accepts them)

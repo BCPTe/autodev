@@ -65,6 +65,32 @@ CREATE TABLE IF NOT EXISTS actions (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS actions_ticket ON actions(ticket_id, id);
+CREATE TABLE IF NOT EXISTS learnings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'proposed',
+    category TEXT NOT NULL,
+    text TEXT NOT NULL,
+    area TEXT NOT NULL DEFAULT '',
+    paths TEXT NOT NULL DEFAULT '[]',
+    evidence TEXT NOT NULL DEFAULT '',
+    source_ticket_id TEXT NOT NULL,
+    source_title TEXT NOT NULL,
+    run_id INTEGER,
+    created_at REAL NOT NULL,
+    decided_at REAL,
+    entry_id TEXT
+);
+CREATE INDEX IF NOT EXISTS learnings_status ON learnings(project, status);
+CREATE TABLE IF NOT EXISTS playbook_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project TEXT NOT NULL,
+    run_id INTEGER NOT NULL,
+    entry_id TEXT NOT NULL,
+    cited INTEGER NOT NULL DEFAULT 0,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS playbook_usage_entry ON playbook_usage(project, entry_id);
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     created_at REAL NOT NULL,
@@ -84,9 +110,10 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
         columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(runs)")}
-        if "dismissed" not in columns:  # added after the first release
-            self._conn.execute("ALTER TABLE runs ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
-            self._conn.commit()
+        for name, ddl in (("dismissed", "INTEGER NOT NULL DEFAULT 0"), ("turns", "INTEGER NOT NULL DEFAULT 0"), ("area", "TEXT")):
+            if name not in columns:  # added after the first release
+                self._conn.execute(f"ALTER TABLE runs ADD COLUMN {name} {ddl}")
+        self._conn.commit()
 
     def execute(self, sql: str, params: tuple | dict = ()) -> int:
         with self._lock:

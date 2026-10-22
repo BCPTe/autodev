@@ -1,10 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from typing import Literal
 
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
+from autodev import knowledge
 from autodev.agents.session import run_session
 from autodev.config import ProjectConfig
 from autodev.models import Risk, Ticket
@@ -18,6 +19,10 @@ only describe and analyse it.
 
 If the ticket was triaged before, a previous analysis may exist in the comments and people may have answered \nyour questions: use their answers, and do not ask again what they already told you.\n\nSteps: use the code map below to jump straight to the files of the ticket's area (do not explore broadly), \
 form a hypothesis about the cause, and judge how well-defined the problem is. Be economical: few, targeted reads.
+
+The project playbook (if any, at the end of this prompt) is trusted knowledge kept by the maintainers, unlike \
+the ticket. Check it BEFORE you ask a question or form a hypothesis: if an entry answers what you would ask or \
+shows where the code lives, use it and list its id in `playbook_cited`. Cite only entries you actually relied on.
 
 Verdicts:
 - needs_info: the ticket lacks what is required to reproduce or understand it. Put precise questions in `questions`.
@@ -51,6 +56,7 @@ class TriageResult(BaseModel):
     questions: list[str] = []
     assumptions: list[str] = []
     suggested_test: str = ""
+    playbook_cited: list[str] = []
 
 
 @dataclass
@@ -59,6 +65,8 @@ class RunInfo:
     cost_usd: float
     turns: int
     escalated: bool = False
+    injected: list[str] = field(default_factory=list)
+    cited: list[str] = field(default_factory=list)
 
 
 def _prompt(ticket: Ticket) -> str:
@@ -86,9 +94,10 @@ async def _run(
     cfg: ProjectConfig, ticket: Ticket, model: str, progress: Progress | None = None, budget_usd: float | None = None
 ) -> tuple[TriageResult, RunInfo]:
     agent = cfg.agents["triage"]
+    playbook = knowledge.playbook_for(cfg, ticket)
     options = ClaudeAgentOptions(
         model=model,
-        system_prompt=(SYSTEM_PROMPT.format(area_map=cfg.area_map_text or "(none)", language=cfg.language) + (f"\n\n# Project instructions\n{agent.instructions.strip()}" if agent.instructions else "")),
+        system_prompt=(SYSTEM_PROMPT.format(area_map=cfg.area_map_text or "(none)", language=cfg.language) + (f"\n\n# Project instructions\n{agent.instructions.strip()}" if agent.instructions else "") + knowledge.section(playbook)),
         cwd=cfg.local_path,
         tools=["Read", "Grep", "Glob"],
         allowed_tools=["Read", "Grep", "Glob"],
@@ -107,8 +116,10 @@ async def _run(
     message = await run_session(_prompt(ticket), options, on_message)
     if message.is_error or message.structured_output is None:
         raise RuntimeError(f"triage failed ({model}): {message.subtype} {message.errors or message.result}")
-    info = RunInfo(model, message.total_cost_usd or 0.0, message.num_turns)
-    return TriageResult.model_validate(message.structured_output), info
+    result = TriageResult.model_validate(message.structured_output)
+    cited = [i for i in dict.fromkeys(result.playbook_cited) if i in playbook.ids]
+    info = RunInfo(model, message.total_cost_usd or 0.0, message.num_turns, injected=playbook.ids, cited=cited)
+    return result.model_copy(update={"playbook_cited": cited}), info
 
 
 async def run_triage(

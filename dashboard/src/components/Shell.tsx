@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
-import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
+import { Activity, BookOpenCheck, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, Lightbulb, LogOut, Moon, Settings, Sun, Ticket } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -19,6 +19,7 @@ const NAV = [
   { to: "/runs", label: "Activity", icon: Activity },
   { to: "/repo", label: "Repo", icon: GitBranch },
   { to: "/prs", label: "Pull requests", icon: GitPullRequest },
+  { to: "/learnings", label: "Learnings", icon: Lightbulb },
   { to: "/costs", label: "Costs", icon: CircleDollarSign },
   { to: "/settings", label: "Settings", icon: Settings },
 ]

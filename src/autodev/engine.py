@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from autodev import github, notify
+from autodev import github, knowledge, notify
+from autodev.agents.learn import learn_ticket
 from autodev.checks import run_check
 from autodev.config import ProjectConfig
 from autodev.control import RunControl, current_control
@@ -28,6 +29,7 @@ MODES = ("auto", "supervised", "manual", "paused")
 TRIAGE_FROM = {Status.NEW, Status.NEEDS_INFO, Status.ANALYZED, Status.ESCALATED}
 FIX_FROM = {Status.IN_PROGRESS}
 PUBLISH_FROM = {Status.IN_PROGRESS, Status.ESCALATED}
+LEARN_FROM = {Status.CLOSED, Status.REVIEW}
 
 
 QUIET_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$")
@@ -54,6 +56,10 @@ def triage_job(cfg: ProjectConfig, tracker, ticket: Ticket):
         return RunSummary(
             outcome=r[0].value, cost_usd=sum(x.cost_usd for x in r[1]),
             model=r[1][-1].model if r[1] else None, result_text=r[2],
+            extra={
+                "turns": sum(x.turns for x in r[1]),
+                "playbook": {"injected": r[1][-1].injected, "cited": r[1][-1].cited} if r[1] else None,
+            },
         )
 
     return work, summarize
@@ -68,6 +74,7 @@ def fix_job(cfg: ProjectConfig, tracker, ticket: Ticket):
             outcome=o.status.value, cost_usd=o.cost_usd, model=o.models[-1] if o.models else None,
             branch=o.branch, pr_url=o.pr_url,
             result_text="\n".join([*(c.line() for c in o.checks), o.message]).strip() or None,
+            extra={"turns": getattr(o, "turns", 0), "playbook": {"injected": o.playbook, "cited": []} if getattr(o, "playbook", None) else None},
         )
 
     return work, summarize
@@ -79,6 +86,19 @@ def publish_job(cfg: ProjectConfig, tracker, ticket: Ticket):
 
     def summarize(o) -> RunSummary:
         return RunSummary(outcome=o.status.value, branch=o.branch, pr_url=o.pr_url, result_text="\n".join(c.line() for c in o.checks) or None)
+
+    return work, summarize
+
+
+def learn_job(cfg: ProjectConfig, tracker, ticket: Ticket, db: Database, project: str):
+    async def work(report: Report):
+        return await learn_ticket(cfg, tracker, db, project, ticket, report)
+
+    def summarize(o) -> RunSummary:
+        return RunSummary(
+            outcome="proposed" if o.saved else "nothing_to_learn", cost_usd=o.cost_usd, model=o.model,
+            result_text="\n".join(f"- {t}" for t in o.texts) or "Nothing worth adding to the playbook.", extra={"turns": o.turns},
+        )
 
     return work, summarize
 
@@ -111,6 +131,7 @@ class Engine:
         self._tasks: set[asyncio.Task] = set()
         self._tried: dict[tuple[str, str], float] = {}
         self._last_tick: float | None = None
+        self._learn_queue: dict[str, Ticket] = {}
 
     # ---- settings ------------------------------------------------------------------------
     def _k(self, name: str) -> str:
@@ -210,17 +231,19 @@ class Engine:
 
     # ---- starting and stopping jobs ------------------------------------------------------
     async def start(self, ticket_id: str, kind: str, actor: str = "user") -> None:
-        if kind not in ("triage", "fix", "publish"):
+        if kind not in ("triage", "fix", "publish", "learn"):
             raise Refused(f"unknown job type: {kind}")
         self._check_can_start(actor)
         self._launching = True
         try:
             ticket, _ = await self.tracker.detail(ticket_id)
-            allowed = {"triage": TRIAGE_FROM, "fix": FIX_FROM, "publish": PUBLISH_FROM}[kind]
+            if kind == "learn" and not knowledge.enabled(self.cfg):
+                raise Refused("the playbook is turned off for this project (`knowledge.enabled`)")
+            allowed = {"triage": TRIAGE_FROM, "fix": FIX_FROM, "publish": PUBLISH_FROM, "learn": LEARN_FROM}[kind]
             if ticket.status not in allowed:
                 raise Refused(
                     f"the ticket is in state '{self.cfg.tracker.status_map[ticket.status]}': "
-                    + ("it needs a ticket that can be analysed" if kind == "triage" else "approve it first (state 'In progress')" if kind == "fix" else "only a ticket that was worked on can be published")
+                    + ("it needs a ticket that can be analysed" if kind == "triage" else "approve it first (state 'In progress')" if kind == "fix" else "only a ticket that was worked on can be published" if kind == "publish" else "only a closed ticket, or one in review, can be learned from")
                 )
             self.db.audit(actor, f"start_{kind}", ticket.id, ticket.title)
             task = asyncio.ensure_future(self._execute(ticket, kind))
@@ -253,9 +276,12 @@ class Engine:
         task.add_done_callback(self._tasks.discard)
 
     async def _execute(self, ticket: Ticket, kind: str) -> None:
-        job = {"triage": triage_job, "fix": fix_job, "checks": checks_job, "publish": publish_job}[kind]
-        work, summarize = job(self.cfg, self.tracker, ticket)
-        if kind != "checks":
+        if kind == "learn":
+            work, summarize = learn_job(self.cfg, self.tracker, ticket, self.db, self.project)
+        else:
+            job = {"triage": triage_job, "fix": fix_job, "checks": checks_job, "publish": publish_job}[kind]
+            work, summarize = job(self.cfg, self.tracker, ticket)
+        if kind not in ("checks", "learn"):
             self._tried[(ticket.id, ticket.status.value)] = self._clock()
         control = RunControl(self.db, lambda: self.mode, self.notify, lambda: self.permission_policy)
         current_control.set(control)
@@ -277,12 +303,46 @@ class Engine:
             if control.run_id is not None:
                 self.controls.pop(control.run_id, None)
             self.on_change()
+            self.drain_learn()
 
     @staticmethod
     def _finished_message(kind: str, ticket: Ticket, summary: RunSummary) -> tuple[str, str]:
-        verdict = {"review": "ready for review", "escalated": "needs your attention", "analyzed": "analysed, waiting for your approval",
+        verdict = {"review": "ready for review", "escalated": "needs your attention", "analyzed": "analysed, waiting for your approval", "proposed": "playbook proposals ready for review", "nothing_to_learn": "nothing new for the playbook",
                    "needs_info": "needs more information", "passed": "checks passed", "failed": "checks failed"}.get(summary.outcome, summary.outcome)
         return f"autodev: {kind} finished", f"{ticket.title}: {verdict}"
+
+    # ---- the playbook ----------------------------------------------------------------------
+    def after_close(self, ticket: Ticket) -> None:
+        """A ticket was closed with a merged PR: queue a retrospective (it only proposes; a person accepts)."""
+        k = self.cfg.knowledge
+        if not (knowledge.enabled(self.cfg) and k.auto_propose_on_close) or self._learned(ticket.id):
+            return
+        self._learn_queue[ticket.id] = ticket
+        self.drain_learn()
+
+    def _learned(self, ticket_id: str) -> bool:
+        return bool(self.db.one(
+            "SELECT id FROM runs WHERE project = ? AND ticket_id = ? AND kind = 'learn' AND status IN ('running', 'done')", (self.project, ticket_id)
+        ))
+
+    def drain_learn(self) -> None:
+        """Starts the next queued retrospective when the engine is free; otherwise it waits for the next round."""
+        while self._learn_queue:
+            ticket_id = next(iter(self._learn_queue))
+            if self._learned(ticket_id):
+                del self._learn_queue[ticket_id]
+                continue
+            try:
+                self._check_can_start("auto")
+            except Refused:
+                return
+            ticket = self._learn_queue.pop(ticket_id)
+            self._launching = True
+            self.db.audit("auto", "start_learn", ticket.id, ticket.title)
+            task = asyncio.ensure_future(self._execute(ticket, "learn"))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+            return
 
     def _release(self, run_id: int, control: RunControl) -> None:
         """The run row exists now: the database reports busy by itself, and the run can be talked to."""
@@ -307,6 +367,7 @@ class Engine:
         while True:
             try:
                 await self.housekeeping()
+                self.drain_learn()
                 await self.tick()
             except Exception as e:  # a Notion hiccup must not kill the loop
                 self.notice = f"automatic check failed: {e}"
@@ -328,6 +389,7 @@ class Engine:
             if pr["state"] == "merged":
                 await self.tracker.set_status(t.id, Status.CLOSED)
                 self.db.audit("auto", "merged", t.id, f"PR {pr['number']}")
+                self.after_close(t)
                 self.notify("autodev: pull request merged", t.title)
                 if self.cfg.autonomy.auto_cleanup_branches and not self.busy():
                     from autodev.server import repo

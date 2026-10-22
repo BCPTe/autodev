@@ -101,6 +101,20 @@ class Autonomy(BaseModel):
     comment_author: str | None = None
 
 
+class Knowledge(BaseModel):
+    """The project's playbook: short, human-reviewed facts the agents read before they work."""
+
+    enabled: bool = True
+    # Markdown file next to the project file; default `<project>.knowledge.md`.
+    file: str | None = None
+    # Most characters of playbook injected into one prompt.
+    max_chars: int = 6000
+    # Model of the retrospective agent; default is the cheapest triage model.
+    model: str | None = None
+    # Run the retrospective by itself when a ticket is closed (it only proposes; a human accepts).
+    auto_propose_on_close: bool = True
+
+
 class ProjectConfig(BaseModel):
     name: str = ""
     language: str = "English"
@@ -127,6 +141,8 @@ class ProjectConfig(BaseModel):
     checks: list[Check] = []
     regressions: list[Regression] = []
     pr: PRConfig = PRConfig()
+    knowledge: Knowledge = Knowledge()
+    knowledge_path: str = ""
 
 
 def load_project(path: str | Path) -> ProjectConfig:
@@ -134,4 +150,5 @@ def load_project(path: str | Path) -> ProjectConfig:
     cfg = ProjectConfig.model_validate(yaml.safe_load(path.read_text()))
     if cfg.area_map:
         cfg.area_map_text = (path.parent / cfg.area_map).read_text()
+    cfg.knowledge_path = str(path.parent / (cfg.knowledge.file or f"{path.stem}.knowledge.md"))
     return cfg

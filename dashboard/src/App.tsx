@@ -7,6 +7,7 @@ import { Shell } from "@/components/Shell"
 import { api, setProject, storedProject, UNAUTHORIZED_EVENT, type ProjectInfo } from "@/lib/api"
 import { ThemeProvider } from "@/lib/theme"
 import { Costs } from "@/pages/Costs"
+import { Learnings } from "@/pages/Learnings"
 import { Login } from "@/pages/Login"
 import { Now } from "@/pages/Now"
 import { Prs } from "@/pages/Prs"
@@ -67,6 +68,7 @@ function Routed() {
           <Route path="runs/:id" element={<RunDetail />} />
           <Route path="repo" element={<Repo />} />
           <Route path="prs" element={<Prs />} />
+          <Route path="learnings" element={<Learnings />} />
           <Route path="costs" element={<Costs />} />
           <Route path="settings" element={<Settings />} />
         </Route>

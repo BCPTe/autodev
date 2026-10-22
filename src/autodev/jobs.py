@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, TypeVar
 
 from autodev.db import Database, dumps, now
+from autodev.knowledge import record_usage
 from autodev.models import Ticket
 from autodev.progress import Report
 
@@ -104,8 +105,8 @@ async def run_tracked(
         raise DailyCapReached(f"daily cap reached (${spent:.2f} of ${cap:.2f})")
 
     run_id = db.execute(
-        "INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, pid) VALUES(?, ?, ?, ?, 'running', ?, ?)",
-        (project, ticket.id, ticket.title, kind, now(), os.getpid()),
+        "INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, pid, area) VALUES(?, ?, ?, ?, 'running', ?, ?, ?)",
+        (project, ticket.id, ticket.title, kind, now(), os.getpid(), ticket.area),
     )
     add_event(db, run_id, "started", f"{kind} started")
     if launched:
@@ -144,6 +145,9 @@ async def run_tracked(
     if summary.result_text:
         add_event(db, run_id, "result", summary.result_text)
     _finish(db, run_id, "done", summary=summary)
+    playbook = summary.extra.get("playbook")
+    if playbook:
+        record_usage(db, project, run_id, playbook["injected"], playbook["cited"])
     add_event(db, run_id, "finished", summary.outcome, {"cost_usd": summary.cost_usd})
     return result
 
@@ -151,6 +155,6 @@ async def run_tracked(
 def _finish(db: Database, run_id: int, status: str, *, error: str | None = None, summary: RunSummary | None = None) -> None:
     s = summary or RunSummary()
     db.execute(
-        "UPDATE runs SET status = ?, finished_at = ?, error = ?, outcome = ?, cost_usd = ?, model = ?, branch = ?, pr_url = ? WHERE id = ?",
-        (status, now(), error, s.outcome or None, s.cost_usd, s.model, s.branch, s.pr_url, run_id),
+        "UPDATE runs SET status = ?, finished_at = ?, error = ?, outcome = ?, cost_usd = ?, model = ?, branch = ?, pr_url = ?, turns = ? WHERE id = ?",
+        (status, now(), error, s.outcome or None, s.cost_usd, s.model, s.branch, s.pr_url, s.extra.get("turns", 0), run_id),
     )

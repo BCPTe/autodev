@@ -3,6 +3,7 @@ from typing import Literal
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
+from autodev import knowledge
 from autodev.agents.session import run_session
 from autodev.config import ProjectConfig
 from autodev.models import Ticket
@@ -82,7 +83,7 @@ Address the points below in the existing working tree (your earlier changes are 
     return text
 
 
-def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", instructions: str = "") -> str:
+def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", instructions: str = "", playbook: knowledge.Playbook | None = None) -> str:
     """Base instructions plus the repo's own CLAUDE.md, injected explicitly.
 
     Project settings are not loaded from the clone: a fresh clone is untrusted, and settings
@@ -96,7 +97,7 @@ def system_prompt(ws: Workspace, commands: str = "", language: str = "Italian", 
         text += f"\n\n# Commands you may run (exactly these forms)\n{commands.strip()}"
     if rules.exists():
         text += f"\n\n# Project rules (CLAUDE.md)\n{rules.read_text()}"
-    return text
+    return text + (knowledge.section(playbook) if playbook else "")
 
 
 def pick_model(cfg: ProjectConfig, ticket: Ticket, attempt: int) -> str:
@@ -123,12 +124,13 @@ async def run_fix(
     budget_usd: float | None = None,
     model: str | None = None,
     progress: Progress | None = None,
+    playbook: knowledge.Playbook | None = None,
 ) -> tuple[FixResult, float, int]:
     agent = cfg.agents["fix"]
     bash = [f"Bash({expand(p, cfg)}:*)" for p in agent.allowed_bash]
     options = ClaudeAgentOptions(
         model=model or agent.models[0],
-        system_prompt=system_prompt(ws, expand(agent.commands, cfg), cfg.language, agent.instructions),
+        system_prompt=system_prompt(ws, expand(agent.commands, cfg), cfg.language, agent.instructions, playbook),
         cwd=str(ws.path),
         tools=["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
         allowed_tools=["Read", "Grep", "Glob", "Edit", "Write", *bash],
