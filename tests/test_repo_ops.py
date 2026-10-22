@@ -126,3 +126,16 @@ async def test_merge_surfaces_githubs_reason_when_refused(project, monkeypatch):
     respx.put("https://api.github.com/repos/o/r/pulls/1/merge").mock(return_value=httpx.Response(405, json={"message": "Required status check is failing"}))
     with pytest.raises(RuntimeError, match="Required status check"):
         await github.merge_pull(project, 1)
+
+
+@respx.mock
+async def test_checks_the_token_cannot_read_are_unknown_not_absent(project, monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "t")
+    project.pr.slug = "o/r"
+    base = "https://api.github.com/repos/o/r"
+    respx.get(f"{base}/pulls", params={"state": "all"}).mock(return_value=httpx.Response(200, json=[pr(1, "autodev/fix-a")]))
+    respx.get(f"{base}/commits/abc/check-runs").mock(return_value=httpx.Response(403, json={"message": "Resource not accessible"}))
+    respx.get(f"{base}/commits/abc/status").mock(return_value=httpx.Response(403, json={"message": "Resource not accessible"}))
+    respx.get(f"{base}/pulls/1").mock(return_value=httpx.Response(200, json={"mergeable": True}))
+    prs = await github.list_pulls(project, "autodev")
+    assert prs[0]["checks"]["verdict"] == "unknown" and "Checks" in prs[0]["checks"]["reason"]

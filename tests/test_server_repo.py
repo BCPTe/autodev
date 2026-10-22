@@ -115,3 +115,10 @@ async def test_checks_run_as_a_tracked_job(tmp_path):
     run = db.one("SELECT kind, status, outcome FROM runs")
     assert run == {"kind": "checks", "status": "done", "outcome": "passed"}
     assert "PASS  tests" in db.one("SELECT text FROM events WHERE type = 'result'")["text"]
+
+
+def test_a_pull_request_whose_checks_cannot_be_read_is_not_merged_blindly(env):
+    c, *_, state, _ = env
+    state["prs"] = [pr(1, verdict="unknown")]
+    r = c.post("/api/prs/1/merge", json={"confirm": True})
+    assert r.status_code == 409 and "cannot be read" in r.json()["detail"] and state["merged"] == []

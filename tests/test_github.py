@@ -69,3 +69,13 @@ async def test_existing_pull_request_is_reused_instead_of_failing(monkeypatch):
     respx.post(f"{REPO}/pulls").mock(return_value=httpx.Response(422, text='{"errors":[{"message":"A pull request already exists for x"}]}'))
     respx.get(f"{REPO}/pulls").mock(return_value=httpx.Response(200, json=[{"html_url": "https://github.com/o/r/pull/7"}]))
     assert await create_pull_request(CFG, "autodev/x", "t", "b") == "https://github.com/o/r/pull/7"
+
+
+@respx.mock
+async def test_a_token_that_cannot_read_ci_results_is_caught_by_the_check(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "x")
+    respx.get(REPO).mock(return_value=httpx.Response(200, json={}))
+    respx.get(f"{REPO}/branches/{CFG.base_branch}").mock(return_value=httpx.Response(200, json={"commit": {"sha": "abc"}}))
+    respx.get(f"{REPO}/commits/abc/check-runs").mock(return_value=httpx.Response(403))
+    respx.get(f"{REPO}/commits/abc/status").mock(return_value=httpx.Response(403))
+    assert "'Checks' and 'Commit statuses'" in await verify_access(CFG)

@@ -405,6 +405,8 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             raise HTTPException(409, "the pull request is not open")
         if pr["draft"]:
             raise HTTPException(409, "the pull request is a draft")
+        if pr["checks"] and pr["checks"]["verdict"] == "unknown":
+            raise HTTPException(409, "the checks on GitHub cannot be read with this token, so they cannot be verified here: merge on GitHub or give the token 'Checks' and 'Commit statuses' (read)")
         if pr["checks"] and pr["checks"]["verdict"] in ("failing", "pending"):
             raise HTTPException(409, "the checks on GitHub have not passed: wait or fix them")
         if pr["mergeable"] is False:
