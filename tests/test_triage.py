@@ -31,7 +31,7 @@ def test_area_map_loaded_into_config():
 async def test_cascade_stops_at_haiku_when_confident(monkeypatch):
     calls = []
 
-    async def fake(cfg, ticket, model, progress=None, budget=None):
+    async def fake(cfg, ticket, model, progress=None, budget=None, previous=None):
         calls.append(model)
         return _result("high"), RunInfo(model, 0.05, 4)
 
@@ -42,7 +42,7 @@ async def test_cascade_stops_at_haiku_when_confident(monkeypatch):
 
 
 async def test_cascade_escalates_on_low_confidence(monkeypatch):
-    async def fake(cfg, ticket, model, progress=None, budget=None):
+    async def fake(cfg, ticket, model, progress=None, budget=None, previous=None):
         return _result("low" if "haiku" in model else "high"), RunInfo(model, 0.1, 5)
 
     monkeypatch.setattr(triage, "_run", fake)
@@ -52,7 +52,7 @@ async def test_cascade_escalates_on_low_confidence(monkeypatch):
 
 
 async def test_cascade_raises_when_all_models_fail(monkeypatch):
-    async def fake(cfg, ticket, model, progress=None, budget=None):
+    async def fake(cfg, ticket, model, progress=None, budget=None, previous=None):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(triage, "_run", fake)
@@ -61,7 +61,7 @@ async def test_cascade_raises_when_all_models_fail(monkeypatch):
 
 
 async def test_cascade_reports_progress_lines(monkeypatch):
-    async def fake(cfg, ticket, model, progress=None, budget=None):
+    async def fake(cfg, ticket, model, progress=None, budget=None, previous=None):
         return _result("low" if "haiku" in model else "high"), RunInfo(model, 0.1, 5)
 
     monkeypatch.setattr(triage, "_run", fake)
@@ -101,3 +101,13 @@ def test_needs_info_keeps_its_questions():
 
     raw = TriageResult(verdict="needs_info", confidence="high", risk="Low", analysis="a", questions=["Quale file?"])
     assert normalize(raw).questions == ["Quale file?"]
+
+
+def test_a_new_triage_starts_from_the_previous_analysis_instead_of_from_scratch():
+    from autodev.agents.triage import _prompt
+
+    t = _ticket("x" * 100)
+    assert "previous_analysis" not in _prompt(t)
+    prompt = _prompt(t, "Triage: ready (risk Medium)\n\nCause in export.py")
+    assert "<previous_analysis>\nTriage: ready (risk Medium)\n\nCause in export.py\n</previous_analysis>" in prompt
+    assert "re-check only what the new comments change" in prompt

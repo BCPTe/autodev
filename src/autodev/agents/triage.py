@@ -69,8 +69,8 @@ class RunInfo:
     cited: list[str] = field(default_factory=list)
 
 
-def _prompt(ticket: Ticket) -> str:
-    return f"""Triage this ticket.
+def _prompt(ticket: Ticket, previous: str | None = None) -> str:
+    text = f"""Triage this ticket.
 
 <ticket>
 Title: {ticket.title}
@@ -88,10 +88,21 @@ Description:
 Follow-up comments from people (newest last; they may answer earlier questions):
 {chr(10).join(f"- {c}" for c in ticket.comments) or "(none)"}
 </ticket>"""
+    if previous:
+        text += f"""
+
+You already triaged this ticket. Your previous analysis is below; it may be outdated now that people added \
+comments. Start from it: re-check only what the new comments change instead of exploring the code again, and \
+answer the whole ticket again (a complete analysis, not a diff).
+<previous_analysis>
+{previous}
+</previous_analysis>"""
+    return text
 
 
 async def _run(
-    cfg: ProjectConfig, ticket: Ticket, model: str, progress: Progress | None = None, budget_usd: float | None = None
+    cfg: ProjectConfig, ticket: Ticket, model: str, progress: Progress | None = None, budget_usd: float | None = None,
+    previous: str | None = None,
 ) -> tuple[TriageResult, RunInfo]:
     agent = cfg.agents["triage"]
     playbook = knowledge.playbook_for(cfg, ticket)
@@ -113,7 +124,7 @@ async def _run(
                 if isinstance(block, ToolUseBlock):
                     progress.tool(block.name, block.input, cfg.local_path)
 
-    message = await run_session(_prompt(ticket), options, on_message)
+    message = await run_session(_prompt(ticket, previous), options, on_message)
     if message.is_error or message.structured_output is None:
         raise RuntimeError(f"triage failed ({model}): {message.subtype} {message.errors or message.result}")
     result = TriageResult.model_validate(message.structured_output)
@@ -123,7 +134,8 @@ async def _run(
 
 
 async def run_triage(
-    cfg: ProjectConfig, ticket: Ticket, report: Report | None = None, budget_usd: float | None = None
+    cfg: ProjectConfig, ticket: Ticket, report: Report | None = None, budget_usd: float | None = None,
+    previous: str | None = None,
 ) -> tuple[TriageResult, list[RunInfo]]:
     """Try the cheapest model first; move up the list only when it reports low confidence or fails."""
     runs: list[RunInfo] = []
@@ -134,7 +146,7 @@ async def run_triage(
         if progress:
             progress("starting analysis")
         try:
-            result, info = await _run(cfg, ticket, model, progress, (budget_usd - sum(r.cost_usd for r in runs)) if budget_usd else None)
+            result, info = await _run(cfg, ticket, model, progress, (budget_usd - sum(r.cost_usd for r in runs)) if budget_usd else None, previous)
         except RuntimeError as e:
             last_error = e
             if progress:

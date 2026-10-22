@@ -47,7 +47,7 @@ async def test_triage_runs_do_not_consume_fix_attempts(monkeypatch):
     from autodev import pipeline
     from autodev.agents.triage import RunInfo, TriageResult
 
-    async def fake_run_triage(cfg, ticket, report=None, budget_usd=None):
+    async def fake_run_triage(cfg, ticket, report=None, budget_usd=None, previous=None):
         return TriageResult(verdict="ready", confidence="high", risk="Low", analysis="a"), [RunInfo("m", 0.2, 3)]
 
     monkeypatch.setattr(pipeline, "run_triage", fake_run_triage)
@@ -56,6 +56,8 @@ async def test_triage_runs_do_not_consume_fix_attempts(monkeypatch):
         updates: list = []
 
         async def comment(self, *a): ...
+        async def bot_comments(self, ticket_id):
+            return []
         async def set_status(self, *a): ...
         async def update(self, ticket_id, **kw):
             self.updates.append(kw)

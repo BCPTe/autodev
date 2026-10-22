@@ -83,7 +83,10 @@ async def triage_ticket(
         return Status.NEEDS_INFO, [], f"Triage: needs_info\n\n{missing}"
 
     try:
-        result, runs = await run_triage(cfg, ticket, report, budget_usd=remaining_budget(cfg, ticket))
+        earlier = [c for c in await tracker.bot_comments(ticket.id) if c.startswith("Triage:")]
+        result, runs = await run_triage(
+            cfg, ticket, report, budget_usd=remaining_budget(cfg, ticket), previous=earlier[-1][:6000] if earlier else None
+        )
     except Exception as e:
         await tracker.update(ticket.id, agent_note=f"Triage failed: {e}")
         await tracker.set_status(ticket.id, Status.ESCALATED)
