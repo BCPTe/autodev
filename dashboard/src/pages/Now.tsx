@@ -3,7 +3,10 @@ import { PageHeader } from "@/components/PageHeader"
 import { PipelineRail } from "@/components/PipelineRail"
 import { RunFeed } from "@/components/RunFeed"
 import { ApprovalCard } from "@/components/ApprovalCard"
+import { Button } from "@/components/ui/button"
 import { Lamp } from "@/components/Lamp"
+import { useAct } from "@/hooks/useAct"
+import { post } from "@/lib/api"
 import { StopRun } from "@/components/StopRun"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useOverview, useRuns, useTickets } from "@/hooks/queries"
@@ -13,6 +16,15 @@ import { KIND_LABEL, RUN_LAMP, STATES } from "@/lib/status"
 import type { Run, TicketState } from "@/lib/api"
 
 const ORDER: TicketState[] = ["escalated", "review", "analyzed", "needs_info"]
+
+function DismissRun({ runId }: { runId: number }) {
+  const { act } = useAct()
+  return (
+    <Button size="xs" variant="ghost" className="mt-3" title="Hide this problem; the run stays in Activity" onClick={() => act(() => post(`/api/runs/${runId}/dismiss`, {}))}>
+      Dismiss
+    </Button>
+  )
+}
 
 function Elapsed({ run }: { run: Run }) {
   const now = useNow(1000)
@@ -42,18 +54,19 @@ export function Now() {
           {overview && overview.approvals.length > 0 && (
             <div className="mb-4 space-y-3">{overview.approvals.map((a) => <ApprovalCard key={a.id} a={a} />)}</div>
           )}
-          {overview && inbox.length === 0 && problems.length === 0 && overview.approvals.length === 0 && <p className="text-muted-foreground">Niente da decidere.</p>}
+          {overview && inbox.length === 0 && problems.length === 0 && overview.approvals.length === 0 && <p className="text-muted-foreground">Nothing needs you right now.</p>}
           <ul className="divide-y border-y">
             {problems.map((r) => (
-              <li key={`run-${r.id}`}>
-                <Link to={`/runs/${r.id}`} className="flex items-start gap-3 py-3 hover:bg-muted/50">
+              <li key={`run-${r.id}`} className="flex items-start gap-2 hover:bg-muted/50">
+                <Link to={`/runs/${r.id}`} className="flex min-w-0 flex-1 items-start gap-3 py-3">
                   <Lamp kind={RUN_LAMP[r.status]} className="mt-1.5" />
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{KIND_LABEL[r.kind]} {r.status === "failed" ? "fallito" : "interrotto"}: {r.ticket_title}</p>
+                    <p className="truncate font-medium">{KIND_LABEL[r.kind]} {r.status === "failed" ? "failed" : "stopped"}: {r.ticket_title}</p>
                     <p className="truncate text-[13px] text-muted-foreground">{r.error ?? "Open the run for details"}</p>
                   </div>
                   <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{ago(r.started_at)}</span>
                 </Link>
+                <DismissRun runId={r.id} />
               </li>
             ))}
             {inbox.map(({ ticket, state }) => (

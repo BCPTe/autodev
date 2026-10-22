@@ -409,3 +409,22 @@ def test_quiet_hours_and_notifications_are_set_through_the_control_endpoint(clie
     assert (s["quiet_hours"], s["notifications"]) == ("22:00-07:00", False)
     assert client.put("/api/control", json={"quiet_hours": "notte"}).status_code == 422
     assert client.put("/api/control", json={"quiet_hours": ""}).json()["quiet_hours"] is None
+
+
+# ---- problems that were already dealt with ------------------------------------------------------
+def test_a_failed_run_stops_showing_once_its_ticket_moved_on_or_the_run_is_dismissed(client, env):
+    _, db, tracker, _ = env
+    old = seed_run(db, kind="fix", status="failed", ticket_id="t2", ticket_title="Bug due", error="boom")
+    again = seed_run(db, kind="fix", status="cancelled", ticket_id="t2", ticket_title="Bug due")
+    gone = seed_run(db, kind="fix", status="failed", ticket_id="deleted-in-notion", ticket_title="Deleted")
+    on_review = seed_run(db, kind="fix", status="failed", ticket_id="t3", ticket_title="Bug tre")
+    tracker.tickets[2].status = Status.REVIEW
+
+    shown = [r["id"] for r in client.get("/api/overview").json()["recent_problems"]]
+    assert shown == [again]  # only the latest run of a ticket that still waits; not old, deleted or reviewed ones
+
+    assert client.post(f"/api/runs/{again}/dismiss", json={}).status_code == 200
+    assert client.get("/api/overview").json()["recent_problems"] == []
+    assert client.post("/api/runs/999/dismiss", json={}).status_code == 404
+    assert {old, gone, on_review}  # the runs themselves are kept
+    assert client.get("/api/runs").json()["runs"] and len(client.get("/api/runs").json()["runs"]) >= 4

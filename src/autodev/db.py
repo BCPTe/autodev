@@ -83,6 +83,10 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
+        columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(runs)")}
+        if "dismissed" not in columns:  # added after the first release
+            self._conn.execute("ALTER TABLE runs ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
+            self._conn.commit()
 
     def execute(self, sql: str, params: tuple | dict = ()) -> int:
         with self._lock:

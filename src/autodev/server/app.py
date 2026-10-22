@@ -146,11 +146,16 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         for t in ts:
             counts[t.status.value] = counts.get(t.status.value, 0) + 1
         running = [run_row(r) for r in db.query("SELECT * FROM runs WHERE status = 'running' AND project = ? ORDER BY started_at", (project,))]
+        # A failed or stopped run needs you only while it is the latest word on its ticket: once the ticket was
+        # run again, closed, sent to review or deleted, or you dismissed the run, it is no longer a problem.
+        waiting = {t.id for t in ts if t.status not in (Status.CLOSED, Status.REVIEW)}
         problems = [
             run_row(r) for r in db.query(
-                "SELECT * FROM runs WHERE status IN ('failed','cancelled') AND project = ? AND started_at >= ? ORDER BY started_at DESC",
+                "SELECT * FROM runs WHERE status IN ('failed','cancelled') AND dismissed = 0 AND project = ? AND started_at >= ? "
+                "AND id = (SELECT MAX(id) FROM runs x WHERE x.ticket_id = runs.ticket_id AND x.project = runs.project) "
+                "ORDER BY started_at DESC",
                 (project, time.time() - 24 * 3600),
-            )
+            ) if r["ticket_id"] in waiting or r["ticket_id"] == "repo"
         ]
         inbox = [
             {"kind": "ticket", "state": t.status.value, "ticket": t.model_dump(include={"id", "title", "status", "area", "priority", "risk", "url", "pr_url", "branch", "agent_note", "updated_at"})}
@@ -268,6 +273,13 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     @r.post("/control/stop-all", dependencies=[Depends(require_session)])
     def stop_all():
         return {"stopped": engine.stop()}
+
+    @r.post("/runs/{run_id}/dismiss", dependencies=[Depends(require_session)])
+    def dismiss_run(run_id: int):
+        if not db.one("SELECT id FROM runs WHERE id = ? AND project = ?", (run_id, project)):
+            raise HTTPException(404, "run not found")
+        db.execute("UPDATE runs SET dismissed = 1 WHERE id = ?", (run_id,))
+        return {"ok": True}
 
     @r.post("/runs/{run_id}/cancel", dependencies=[Depends(require_session)])
     def cancel_run(run_id: int):
