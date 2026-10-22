@@ -82,8 +82,14 @@ function Button({
       onClick={handleClick}
       {...props}
     >
-      {isLoading && <Loader2 data-spinner className="animate-spin motion-reduce:animate-none" aria-hidden />}
-      {children}
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {isLoading && <Loader2 data-spinner className="animate-spin motion-reduce:animate-none" aria-hidden />}
+          {children}
+        </>
+      )}
     </Comp>
   )
 }
