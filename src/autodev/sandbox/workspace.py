@@ -82,6 +82,7 @@ class Workspace:
     resumed: bool = False
     inplace: bool = False
     author: tuple[str, ...] = ()
+    leftover: str = ""  # uncommitted files an earlier run of this ticket left in the working tree
 
     @classmethod
     def create(cls, cfg: ProjectConfig, ticket: Ticket) -> "Workspace":
@@ -99,6 +100,14 @@ class Workspace:
         path = Path(cfg.local_path)
         branch = f"{cfg.branch_prefix}/{slugify(ticket.title)}-{ticket.id.replace('-', '')[:6]}"
         dirty = git(path, "status", "--porcelain").splitlines()
+        on_ticket_branch = git(path, "rev-parse", "--abbrev-ref", "HEAD") == branch
+        if dirty and on_ticket_branch:
+            # Left by this ticket's own earlier run (it failed or ran out of budget mid-edit): the work is
+            # the agent's, so it continues from it instead of refusing.
+            return cls(
+                path, branch, f"origin/{cfg.base_branch}", start_ref=git(path, "rev-parse", "HEAD"), resumed=True,
+                inplace=True, author=tuple(identity_flags(cfg)), leftover="\n".join(dirty),
+            )
         if dirty:
             shown = "\n".join(f"  {line}" for line in dirty[:12]) + (f"\n  ... and {len(dirty) - 12} more" if len(dirty) > 12 else "")
             raise DirtyCheckout(
@@ -211,7 +220,13 @@ class Workspace:
             return ""
         log = git(self.path, "log", "--oneline", f"{self.base_ref}..HEAD")
         stat = git(self.path, "diff", "--stat", self.base_ref, "HEAD")
-        return f"{log}\n\n{stat}".strip()
+        text = f"{log}\n\n{stat}".strip()
+        if self.leftover:
+            text += (
+                "\n\nUncommitted changes from your earlier run are still in the working tree (inspect them with "
+                f"git diff, then finish or correct them):\n{self.leftover}"
+            )
+        return text
 
     def commit(self, message: str) -> str:
         git(self.path, "add", "-A")

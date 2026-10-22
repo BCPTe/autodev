@@ -131,3 +131,20 @@ def test_discard_removes_only_the_runs_changes_including_new_files(project):
     assert (local / "shop" / "pricing.py").read_text() != "# half done\n"
     assert (local / "cache" / "kept.txt").exists()
     assert git_out(local, "status", "--porcelain") == ""
+
+
+def test_a_ticket_branch_left_dirty_by_its_own_failed_run_is_resumed_not_refused(project):
+    cfg, local = project
+    first = Workspace.create(cfg, TICKET)
+    (first.path / "shop" / "half_done.py").write_text("X = 1\n")  # the run died mid-edit
+    again = Workspace.create(cfg, TICKET)
+    assert again.resumed and again.branch == first.branch
+    assert "half_done.py" in again.leftover and "half_done.py" in again.history()
+    assert (local / "shop" / "half_done.py").exists()
+
+
+def test_a_dirty_checkout_on_any_other_branch_is_still_refused(project):
+    cfg, local = project
+    (local / "notes.txt").write_text("my own work")
+    with pytest.raises(DirtyCheckout):
+        Workspace.create(cfg, TICKET)
