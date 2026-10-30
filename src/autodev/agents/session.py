@@ -1,4 +1,6 @@
 """Runs one agent conversation, interactively when the run has a `RunControl`, one-shot otherwise."""
+import asyncio
+from contextlib import aclosing
 from dataclasses import replace
 from typing import Callable
 
@@ -8,6 +10,7 @@ from autodev.agents.usage import Meter, from_result, record
 from autodev.control import current_control
 
 NO_MEMORY_ENV = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+STREAM_END_TIMEOUT = 5.0
 
 
 def isolation(user_mcp: bool = False) -> dict:
@@ -36,13 +39,25 @@ async def run_session(prompt: str, options: ClaudeAgentOptions, on_message: Call
     return result
 
 
+async def _drain(stream) -> None:
+    async for _ in stream:
+        pass
+
+
 async def _converse(prompt: str, options: ClaudeAgentOptions, on_message: Callable[[Message], None]) -> ResultMessage:
     control = current_control.get()
     if control is None:
-        async for message in query(prompt=prompt, options=options):
-            on_message(message)
-            if isinstance(message, ResultMessage):
-                return message
+        # Let the stream reach its end after the result, so the SDK reaps the CLI process before the loop
+        # closes; give up after a few seconds (it can hang) and close it here, in this task, either way.
+        async with aclosing(query(prompt=prompt, options=options)) as stream:
+            async for message in stream:
+                on_message(message)
+                if isinstance(message, ResultMessage):
+                    try:
+                        await asyncio.wait_for(_drain(stream), STREAM_END_TIMEOUT)
+                    except TimeoutError:
+                        pass
+                    return message
         raise RuntimeError("agent produced no result")
 
     control.cwd = str(options.cwd or "/")
