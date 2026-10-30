@@ -110,6 +110,30 @@ def update_base(cfg: ProjectConfig) -> bool:
     return _run(path, "merge", "--ff-only", "--quiet", f"origin/{cfg.base_branch}").returncode == 0
 
 
+def merge_branch(cfg: ProjectConfig, branch: str) -> str:
+    """Fast-forwards the base branch to an autodev branch (projects without pull requests) and deletes the branch.
+    Refuses on uncommitted changes or when the branch is not a straight continuation of the base; nothing is rewritten."""
+    path = Path(cfg.local_path)
+    if not branch.startswith(f"{cfg.branch_prefix}/"):
+        raise RepoError(f"only a {cfg.branch_prefix}/* branch can be merged here")
+    if _run(path, "rev-parse", "--verify", "--quiet", branch).returncode != 0:
+        raise RepoError(f"the branch {branch} does not exist in the checkout")
+    if _run(path, "status", "--porcelain").stdout.strip():
+        raise RepoError("there are uncommitted changes: commit or stash before merging")
+    start = _run(path, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    if _run(path, "merge-base", "--is-ancestor", cfg.base_branch, branch).returncode != 0:
+        raise RepoError(f"{branch} is not up to date with {cfg.base_branch}: it cannot be fast-forwarded, merge it by hand")
+    r = _run(path, "checkout", cfg.base_branch)
+    if r.returncode != 0:
+        raise RepoError(r.stderr.strip() or "checkout failed")
+    r = _run(path, "merge", "--ff-only", "--quiet", branch)
+    if r.returncode != 0:
+        _run(path, "checkout", start)
+        raise RepoError(r.stderr.strip() or "the merge failed")
+    _run(path, "branch", "-d", branch)
+    return cfg.base_branch
+
+
 def return_to_base_after_merge(cfg: ProjectConfig, merged_branch: str) -> str | None:
     """After a pull request is merged, leaves the merged branch: back on the base branch, brought up to date,
     and the merged local branch deleted. Does nothing unless the checkout sits on that branch and is clean."""

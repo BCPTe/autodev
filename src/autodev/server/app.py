@@ -626,6 +626,17 @@ def create_app(
             loop.cancel()
 
     app = FastAPI(title="autodev", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+    @app.exception_handler(httpx.HTTPStatusError)
+    async def tracker_error(request: Request, e: httpx.HTTPStatusError):
+        """A tracker or GitHub call refused (missing access, wrong id): say so instead of a bare 500."""
+        try:
+            detail = e.response.json().get("message") or e.response.text
+        except ValueError:
+            detail = e.response.text
+        host = e.request.url.host
+        hint = " Share the database with the integration (Notion: ⋯ > Connections)." if "notion" in host and e.response.status_code in (401, 403, 404) else ""
+        return JSONResponse({"detail": f"{host} answered {e.response.status_code}: {detail}{hint}"}, status_code=502)
     auth = Auth(db)
     app.state.auth = auth
     app.state.engine = engine
