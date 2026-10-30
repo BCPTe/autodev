@@ -113,10 +113,14 @@ class Ctx:
     db: Database
     tracker: Any
     engine: Engine
-    cache: dict[str, Any] = field(default_factory=lambda: {"at": 0.0, "tickets": [], "prs_at": 0.0, "prs": []})
+    cache: dict[str, Any] = field(default_factory=lambda: {"at": 0.0, "tickets": [], "prs_at": 0.0, "prs": [], "changes": 0})
 
     def __post_init__(self) -> None:
-        self.engine.on_change = lambda: self.cache.update(at=0.0)
+        self.engine.on_change = self.tickets_changed
+
+    def tickets_changed(self) -> None:
+        """autodev wrote to the tracker: reread it next time, and tell the open dashboards."""
+        self.cache.update(at=0.0, changes=self.cache["changes"] + 1)
 
 
 def project_router(ctx: Ctx, require_session) -> APIRouter:
@@ -167,7 +171,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
                 (project, time.time() - 24 * 3600),
             ) if r["ticket_id"] in waiting or r["ticket_id"] == "repo"
         ]
-        inbox = [
+        dashboard = [
             {"kind": "ticket", "state": t.status.value, "ticket": t.model_dump(include={"id", "title", "status", "area", "priority", "risk", "url", "pr_url", "branch", "agent_note", "updated_at"})}
             for t in ts if t.status in INBOX_STATES
         ]
@@ -526,6 +530,35 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         if not engine.busy():
             back_on = await asyncio.to_thread(repomod.return_to_base_after_merge, cfg, pr["branch"])
         return {"ok": True, "back_on": back_on}
+
+    class MergeBranch(BaseModel):
+        confirm: bool = False
+
+    @r.post("/tickets/{ticket_id}/merge-branch", dependencies=[Depends(require_session)])
+    async def merge_ticket_branch(ticket_id: str, body: MergeBranch):
+        """For projects that do not open pull requests: fast-forward the base branch to the ticket's branch."""
+        if not body.confirm:
+            raise HTTPException(422, "explicit confirmation is required")
+        if cfg.pr.create:
+            raise HTTPException(409, "this project opens pull requests: merge the pull request instead")
+        ticket = next((t for t in await tickets() if t.id == ticket_id), None)
+        if not ticket:
+            raise HTTPException(404, "ticket not found")
+        if ticket.status != Status.REVIEW or not ticket.branch or ticket.pr_url:
+            raise HTTPException(409, "only a ticket in review with a local branch can be merged here")
+        if ticket.risk == "High":
+            raise HTTPException(403, "High risk: read it and merge by hand")
+        if engine.busy():
+            raise HTTPException(409, "an agent is working on the checkout")
+        try:
+            base = await asyncio.to_thread(repomod.merge_branch, cfg, ticket.branch)
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        await tracker.set_status(ticket.id, Status.CLOSED)
+        engine.after_close(ticket)
+        db.audit("user", "merge", ticket.id, f"branch {ticket.branch}")
+        cache["at"] = 0.0
+        return {"ok": True, "back_on": base}
 
     def checkout_guard() -> None:
         if engine.busy():
