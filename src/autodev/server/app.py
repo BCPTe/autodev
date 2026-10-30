@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Literal, Protocol
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+import httpx
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from autodev.config import ProjectConfig
