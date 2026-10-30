@@ -70,7 +70,7 @@ class FakeTracker:
             update={"body": "What happens\nOn the case detail page, clicking the button does not start any download.\n\nSteps\n1. Open a case\n2. Click Download"}
         )
         return t, [
-            Comment(author="autodev", is_bot=True, created_at="2026-10-21T09:00:00+00:00", text="Triage: ready (risk Medium)\n\nThe ticket is clear. Probable cause in export.py: it takes the first fillable PDF without ordering.\n\nFiles involved:\n- apps/backend/app/api/orders/export.py"),
+            Comment(author="autodev", is_bot=True, created_at="2026-10-21T09:00:00+00:00", text="Triage: ready (risk Medium)\n\nWhat I understood (if it is wrong, correct me with a comment):\n- Where: Case detail page, Download button\n- Expected: clicking Download saves the case PDF\n- Actual: nothing is downloaded and no error appears\n- Steps:\n  1. Open a case\n  2. Click Download\n\nThe ticket is clear. Probable cause in export.py: it takes the first fillable PDF without ordering.\n\nFiles involved:\n- apps/backend/app/api/orders/export.py"),
             Comment(author="Christian Gatto", created_at="2026-10-21T09:10:00+00:00", text="Only the SCIA SUE. Both are required."),
         ]
 

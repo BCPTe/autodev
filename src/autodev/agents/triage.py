@@ -34,20 +34,39 @@ would be a guess. If the verdict is ready, `questions` must be empty; put the in
 any non-blocking doubts in `assumptions` instead, so a human can confirm them in review. Never ask what the \
 ticket or its comments already answer. Refer to people neutrally ("the requester"), never by a guessed name.
 
+Fill `understanding` for the requester, not for the fix agent: it is shown to them as "this is what I \
+understood" and they confirm or correct it before any fix starts. Use plain words from the product's point \
+of view, no code names or file paths: `where` is the screen or feature involved, `expected` what should \
+happen, `actual` what happens instead, `steps` how to get there. Use only what the ticket states or clearly \
+implies: leave a field empty rather than invent it, and if that leaves the problem unclear, ask about it.
+
+`analysis` is for the developer and the fix agent: at most 5 short sentences. First the facts you verified, \
+each with the file you read it in; then, marked as such, your hypothesis on the cause. Do not repeat \
+`understanding`, the questions or the file list, and do not report what you did not read or check.
+
 Confidence: `high` only if you read the relevant code and the verdict follows from it; `low` if you could not \
 find the relevant code or the situation is ambiguous.
 
 Risk: high for auth, billing, database migrations, data loss or security; medium for logic changes spanning \
 several modules; low for local, well-covered or purely visual changes.
 
-Write `analysis` and `questions` in {language}, concise and concrete. `suspected_files` are paths relative to the \
+Write `understanding`, `questions` and `assumptions` in the language the ticket is written in, since the \
+requester reads them; write `analysis` in {language}. Concise and concrete. `suspected_files` are paths relative to the \
 repository root.
 
 # Code map
 {area_map}"""
 
 
+class Understanding(BaseModel):
+    where: str = ""
+    expected: str = ""
+    actual: str = ""
+    steps: list[str] = []
+
+
 class TriageResult(BaseModel):
+    understanding: Understanding = Understanding()
     verdict: Literal["needs_info", "not_reproducible", "ready"]
     confidence: Literal["high", "low"]
     risk: Literal["Low", "Medium", "High"]

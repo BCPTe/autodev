@@ -42,7 +42,14 @@ def prefilter(cfg: ProjectConfig, ticket: Ticket) -> str | None:
 
 
 def format_comment(result: TriageResult, risk: str, runs: list[RunInfo]) -> str:
-    lines = [f"Triage: {result.verdict} (risk {risk})", "", result.analysis]
+    lines = [f"Triage: {result.verdict} (risk {risk})"]
+    u = result.understanding
+    if u.expected or u.actual:
+        lines += ["", "What I understood (if it is wrong, correct me with a comment):"]
+        lines += [f"- {label}: {text}" for label, text in (("Where", u.where), ("Expected", u.expected), ("Actual", u.actual)) if text]
+        if u.steps:
+            lines += ["- Steps:", *[f"  {i}. {step}" for i, step in enumerate(u.steps, 1)]]
+    lines += ["", result.analysis]
     if result.suspected_files:
         lines += ["", "Files involved:", *[f"- {f}" for f in dict.fromkeys(result.suspected_files)]]
     if result.questions:
