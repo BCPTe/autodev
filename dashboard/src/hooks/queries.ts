@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query"
 import { api, type Comment, type ProjectInfo, type DiffFile, type Pr, type Interactive, type Knowledge, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
 
 export const useOverview = () =>
-  useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 5000 })
+  useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 60000 })
 
 export const useTickets = () =>
-  useQuery({ queryKey: ["tickets"], queryFn: () => api<{ tickets: Ticket[]; fetched_at: number }>("/api/tickets"), refetchInterval: 20000 })
+  useQuery({ queryKey: ["tickets"], queryFn: () => api<{ tickets: Ticket[]; fetched_at: number }>("/api/tickets"), refetchInterval: 60000 })
 
 export const useTicket = (id: string | null) =>
   useQuery({
@@ -15,25 +15,24 @@ export const useTicket = (id: string | null) =>
   })
 
 export const useRuns = () =>
-  useQuery({ queryKey: ["runs"], queryFn: () => api<{ runs: Run[] }>("/api/runs?limit=100"), refetchInterval: 4000 })
+  useQuery({ queryKey: ["runs"], queryFn: () => api<{ runs: Run[] }>("/api/runs?limit=100") })
 
 export const useRun = (id: number) =>
   useQuery({
     queryKey: ["run", id],
     queryFn: () => api<{ run: Run; events: RunEvent[]; interactive: Interactive }>(`/api/runs/${id}`),
-    refetchInterval: (q) => (q.state.data?.run.status === "running" ? 2000 : false),
   })
 
 export const useRepo = () =>
-  useQuery({ queryKey: ["repo"], queryFn: () => api<RepoState>("/api/repo"), refetchInterval: 10000 })
+  useQuery({ queryKey: ["repo"], queryFn: () => api<RepoState>("/api/repo") })
 
 export const useCosts = () =>
-  useQuery({ queryKey: ["costs"], queryFn: () => api<Costs>("/api/costs"), refetchInterval: 15000 })
+  useQuery({ queryKey: ["costs"], queryFn: () => api<Costs>("/api/costs") })
 
 export const useConfig = () => useQuery({ queryKey: ["config"], queryFn: () => api<Config>("/api/config") })
 
 export const usePrs = () =>
-  useQuery({ queryKey: ["prs"], queryFn: () => api<{ enabled: boolean; prs: Pr[] }>("/api/prs"), refetchInterval: 30000, retry: 0 })
+  useQuery({ queryKey: ["prs"], queryFn: () => api<{ enabled: boolean; prs: Pr[] }>("/api/prs"), retry: 0 })
 
 export const useDiff = (branch: string | null, open: boolean) =>
   useQuery({
@@ -50,4 +49,4 @@ export const useProjects = () =>
   })
 
 export const useKnowledge = () =>
-  useQuery({ queryKey: ["knowledge"], queryFn: () => api<Knowledge>("/api/knowledge"), refetchInterval: 10000 })
+  useQuery({ queryKey: ["knowledge"], queryFn: () => api<Knowledge>("/api/knowledge") })

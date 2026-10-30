@@ -15,6 +15,7 @@ import { Repo } from "@/pages/Repo"
 import { RunDetail } from "@/pages/RunDetail"
 import { Runs } from "@/pages/Runs"
 import { Settings } from "@/pages/Settings"
+import { TicketPage } from "@/pages/TicketPage"
 import { Tickets } from "@/pages/Tickets"
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 2000 } } })
@@ -64,6 +65,7 @@ function Routed() {
         <Route element={<Shell />}>
           <Route index element={<Now />} />
           <Route path="tickets" element={<Tickets />} />
+          <Route path="tickets/:id" element={<TicketPage />} />
           <Route path="runs" element={<Runs />} />
           <Route path="runs/:id" element={<RunDetail />} />
           <Route path="repo" element={<Repo />} />

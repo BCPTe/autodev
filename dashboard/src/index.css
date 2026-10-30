@@ -25,7 +25,7 @@
   --accent: #dfe6f7;
   --accent-foreground: #17308f;
   --destructive: #c93a3a;
-  --border: #d2d9e1;
+  --border: #dae0e7;
   --input: #c7d0da;
   --ring: #2446d6;
   --radius: 0.375rem;
@@ -104,13 +104,14 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  html { color-scheme: light; }
+  html { font-size: 106.25%; color-scheme: light; }
   html.dark { color-scheme: dark; }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-size: 14px;
+    font-size: 1rem;
     line-height: 1.5;
   }
+  button { @apply cursor-pointer; }
   h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.005em; text-wrap: balance; }
   ::selection { background: color-mix(in oklab, var(--primary) 28%, transparent); }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
@@ -138,3 +139,7 @@
 }
 .lamp-live { animation: lamp-pulse 1.8s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) { .lamp-live { animation: none; } }
+
+/* Ticket rows: white 20% with a light blur, greyer on hover. Applied to the cells because backdrop-filter is unreliable on <tr>. */
+tr.ticket-row > td { background-color: rgb(255 255 255 / 0.2); backdrop-filter: blur(4px); transition: background-color 0.15s; }
+tr.ticket-row:hover > td { background-color: rgba(188, 188, 188, 0.2); }

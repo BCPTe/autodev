@@ -111,7 +111,7 @@ function EntryRow({ e }: { e: PlaybookEntry }) {
       </div>
       {confirming ? (
         <div className="flex shrink-0 gap-1">
-          <Button size="xs" variant="destructive" disabled={pending} onClick={() => act(() => api(`/api/knowledge/entries/${e.id}`, { method: "DELETE" }), "Entry deleted")}>Delete</Button>
+          <Button size="xs" color="red" disabled={pending} onClick={() => act(() => api(`/api/knowledge/entries/${e.id}`, { method: "DELETE" }), "Entry deleted")}>Delete</Button>
           <Button size="xs" variant="ghost" onClick={() => setConfirming(false)}>Keep</Button>
         </div>
       ) : (

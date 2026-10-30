@@ -137,13 +137,13 @@ def test_responses_carry_security_headers(client):
 
 
 # ---- data -----------------------------------------------------------------------------------
-def test_overview_counts_tickets_and_builds_the_inbox(client, env):
+def test_overview_counts_tickets_and_builds_the_dashboard(client, env):
     _, db, *_ = env
     seed_run(db, status="running", kind="fix", cost_usd=0)
     seed_run(db, status="failed", error="boom")
     o = client.get("/api/overview").json()
     assert o["counts"] == {"analyzed": 1, "in_progress": 1, "new": 1}
-    assert [i["ticket"]["title"] for i in o["inbox"]] == ["Bug uno"]
+    assert [i["ticket"]["title"] for i in o["dashboard"]] == ["Bug uno"]
     assert len(o["running"]) == 1 and len(o["recent_problems"]) == 1
     assert o["daily_cap"] == CFG.limits.daily_budget_usd and o["ticket_cap"] == 3.0
 

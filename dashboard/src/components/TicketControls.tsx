@@ -1,10 +1,10 @@
 import { useState } from "react"
-import { GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck } from "lucide-react"
+import { GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck, X } from "lucide-react"
+import { MergeBranchButton } from "@/components/NeedsYouCards"
 import { Button } from "@/components/ui/button"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
-import { patch, post, type Ticket, type TicketAction, type TicketState } from "@/lib/api"
-import { ago } from "@/lib/format"
+import { patch, post, type Ticket, type TicketState } from "@/lib/api"
 
 const selectClass = "h-8 rounded-md border bg-background px-2 text-sm"
 
@@ -15,6 +15,24 @@ function blockedReason(c: { mode: string; my_turn: boolean; busy: boolean } | un
   if (c.my_turn) return "The checkout is yours"
   if (c.busy) return "An agent is already working"
   return null
+}
+
+/** Close or reopen: an action on the ticket as a whole, not a step of its flow. */
+export function CloseTicket({ ticket: t }: { ticket: Ticket }) {
+  const { act, pending } = useAct()
+  const setStatus = (status: TicketState, done: string) => act(() => patch(`/api/tickets/${t.id}`, { status }), done)
+  if (t.status === "closed") return <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("new", "Reopened")}><RotateCcw /> Reopen</Button>
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      color="red"
+      disabled={pending}
+      onClick={() => setStatus("closed", "Closed")}
+    >
+      <X /> Close ticket
+    </Button>
+  )
 }
 
 export function TicketControls({ ticket: t }: { ticket: Ticket }) {
@@ -31,11 +49,14 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
     if (await setStatus("in_progress", "Approved")) await start("fix", "Fix started")
   }
 
-  const startBtn = (kind: "triage" | "fix", label: string, variant: "default" | "outline" = "outline") => (
+  const startBtn = (kind: "triage" | "fix", label: string, variant: "default" | "secondary" = "secondary") => (
     <Button size="sm" variant={variant} disabled={pending || !!blocked} title={blocked ?? undefined} onClick={() => start(kind, kind === "fix" ? "Fix started" : "Triage started")}>
       <Play /> {label}
     </Button>
   )
+
+  // after a verified fix whose pull request could not be opened, publishing is the move; retrying the agent is the fallback
+  const canOpenPr = state === "escalated" && !!config?.pr_enabled && !t.pr_url && !!t.branch && t.verification === "Passed"
 
   return (
     <section aria-label="Actions" className="space-y-3 rounded-sm border bg-muted/40 p-3">
@@ -43,28 +64,28 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         {state === "new" && startBtn("triage", "Analyse now", "default")}
         {state === "needs_info" && (
           <>
-            <Button size="sm" disabled={pending} onClick={() => setStatus("new", "Moved back to New")}><RotateCcw /> Move back to New</Button>
-            {startBtn("triage", "Analyse again")}
+            {/* answering happens in the comment box, which also restarts the triage; this is for answers left on Notion */}
+            {startBtn("triage", "Analyse again", "default")}
           </>
         )}
         {state === "analyzed" && (
           <>
             <Button size="sm" disabled={pending || !!blocked} title={blocked ?? undefined} onClick={approveAndStart}><ShieldCheck /> Approve and start</Button>
-            <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("in_progress", "Approved")}>Approve only</Button>
+            <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Approved")}>Approve only</Button>
             {startBtn("triage", "Analyse again")}
           </>
         )}
         {state === "in_progress" && startBtn("fix", "Start fix", "default")}
         {state === "review" && (
-          <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("in_progress", "Moved back to In progress")}><RotateCcw /> Move back to In progress</Button>
+          <>
+          <MergeBranchButton ticket={t} />
+          <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Moved back to In progress")}><RotateCcw /> Move back to In progress</Button>
+          </>
         )}
-        {state === "escalated" && (
-          <Button size="sm" disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })}><RotateCcw /> Retry (reset attempts)</Button>
-        )}
-        {(state === "in_progress" || state === "escalated") && !t.pr_url && (t.branch || t.attempts > 0) && (
+        {/* only after a verified fix whose pull request could not be opened (see pipeline._fix_in_workspace) */}
+        {canOpenPr && (
           <Button
             size="sm"
-            variant="outline"
             disabled={pending || !!blocked}
             title={blocked ?? "Opens the pull request for the work already done on the branch (re-runs the checks, no agent)"}
             onClick={() => start("publish", "Opening the pull request")}
@@ -72,21 +93,8 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
             <GitPullRequest /> Open PR
           </Button>
         )}
-        {(state === "closed" || state === "review") && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={pending || !!blocked}
-            title={blocked ?? "A cheap read-only agent reads how this ticket went and proposes playbook entries for you to review"}
-            onClick={() => start("learn", "Retrospective started: proposals will appear in Learnings")}
-          >
-            <Lightbulb /> Learn from this ticket
-          </Button>
-        )}
-        {state === "closed" ? (
-          <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("new", "Reopened")}>Reopen</Button>
-        ) : (
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setStatus("closed", "Closed")}>Close</Button>
+        {state === "escalated" && (
+          <Button size="sm" variant={canOpenPr ? "secondary" : "default"} disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })}><RotateCcw /> Retry (reset attempts)</Button>
         )}
         {blocked && (state === "new" || state === "in_progress") && <span className="text-xs text-muted-foreground">{blocked}</span>}
       </div>
@@ -95,7 +103,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         <label className="inline-flex items-center gap-2">
           <input
             type="checkbox"
-            className="size-4 accent-[var(--primary)]"
+            className="size-4 accent-primary"
             checked={t.authorized}
             disabled={pending}
             onChange={(e) => act(() => patch(`/api/tickets/${t.id}`, { authorized: e.target.checked }), e.target.checked ? "Ticket authorised" : "Authorisation removed")}
@@ -114,8 +122,20 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
           </select>
         </label>
         {t.attempts > 0 && (
-          <Button size="xs" variant="outline" disabled={pending} onClick={() => act(() => patch(`/api/tickets/${t.id}`, { attempts: 0 }), "Attempts reset")}>
+          <Button size="sm" color="red" disabled={pending} onClick={() => act(() => patch(`/api/tickets/${t.id}`, { attempts: 0 }), "Attempts reset")}>
             Reset attempts ({t.attempts})
+          </Button>
+        )}
+        {(state === "closed" || state === "review") && (
+          <Button
+            className="ml-auto"
+            size="sm"
+            color="amber"
+            disabled={pending || !!blocked}
+            title={blocked ?? "A cheap read-only agent reads how this ticket went and proposes playbook entries for you to review"}
+            onClick={() => start("learn", "Retrospective started: proposals will appear in Learnings")}
+          >
+            <Lightbulb /> Learn from this ticket
           </Button>
         )}
       </div>
@@ -123,11 +143,22 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
   )
 }
 
-export function CommentBox({ ticketId }: { ticketId: string }) {
+/**
+ * Comment box. With `reanalyse` (the triage asked questions, or got the problem wrong) sending is the whole
+ * answer: the comment goes to the ticket and the triage starts again.
+ */
+export function CommentBox({ ticketId, reanalyse = false }: { ticketId: string; reanalyse?: boolean }) {
   const { act, pending } = useAct()
   const [text, setText] = useState("")
   const send = async () => {
-    if (await act(() => post(`/api/tickets/${ticketId}/comment`, { text }), "Comment sent to Notion")) setText("")
+    if (!reanalyse) {
+      if (await act(() => post(`/api/tickets/${ticketId}/comment`, { text }), "Comment sent to Notion")) setText("")
+      return
+    }
+    if (!(await act(() => post(`/api/tickets/${ticketId}/comment`, { text })))) return
+    setText("")
+    // if no agent can start now (one is busy, Paused mode...) the answer is saved and the error says why
+    await act(() => post(`/api/tickets/${ticketId}/start`, { kind: "triage" }), "Answer sent: autodev is analysing the ticket again")
   }
   return (
     <form className="mt-3 space-y-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) send() }}>
@@ -137,15 +168,17 @@ export function CommentBox({ ticketId }: { ticketId: string }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
-        placeholder="Answer its questions or add context: it goes into the ticket's comments on Notion and the agent reads it"
+        placeholder={reanalyse
+          ? "Answer its questions or correct what it understood: autodev reads it and analyses the ticket again"
+          : "Add context: it goes into the ticket's comments on Notion and the agent reads it"}
         className="w-full resize-y rounded-md border bg-background px-3 py-2 text-[13.5px]"
       />
-      <Button type="submit" size="sm" loading={pending} disabled={!text.trim()}>Send comment</Button>
+      <Button type="submit" size="sm" loading={pending} disabled={!text.trim()}>{reanalyse ? "Send and analyse again" : "Send comment"}</Button>
     </form>
   )
 }
 
-const ACTION_LABEL: Record<string, string> = {
+export const ACTION_LABEL: Record<string, string> = {
   start_triage: "started the triage",
   start_fix: "started the fix",
   start_learn: "started the retrospective",
@@ -155,22 +188,4 @@ const ACTION_LABEL: Record<string, string> = {
   stop: "stopped an agent",
   message: "wrote to the agent",
   approval: "answered a request from the agent",
-}
-
-export function History({ actions }: { actions: TicketAction[] }) {
-  if (!actions.length) return null
-  return (
-    <section>
-      <h3 className="mb-2 text-base font-semibold">Who decided</h3>
-      <ul className="space-y-1 text-[13px]">
-        {actions.map((a, i) => (
-          <li key={i} className="flex gap-2">
-            <span className="font-medium">{a.actor === "auto" ? "Automatic" : "You"}</span>
-            <span className="text-muted-foreground">{ACTION_LABEL[a.action] ?? a.action}{a.action === "approve" && a.detail ? ` (${a.detail})` : ""}</span>
-            <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">{ago(a.ts)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
 }

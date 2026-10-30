@@ -59,7 +59,7 @@ export function RunFeed({ runId, className }: { runId: number; className?: strin
         {!ended && lines.length > 0 && <div className="pl-[52px] text-muted-foreground">▍</div>}
       </div>
       {result && (
-        <div className="mt-3">
+        <div className="mt-3 shrink-0">
           <h4 className="mb-1 font-display text-sm font-semibold">Outcome</h4>
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-sm border bg-card p-3 font-sans text-[13px] leading-relaxed">{result.text}</pre>
         </div>

@@ -25,7 +25,8 @@ from autodev.server.repo import RepoError, repo_state
 
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "testserver"}
 INBOX_STATES = {Status.NEEDS_INFO, Status.ANALYZED, Status.REVIEW, Status.ESCALATED}
-TICKET_CACHE_SECONDS = 20
+TICKET_CACHE_SECONDS = 60
+EVENTS_TICK_SECONDS = 0.5
 DIST = Path(__file__).resolve().parents[3] / "dashboard" / "dist"
 
 
@@ -183,7 +184,7 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             "counts": counts,
             "running": running,
             "recent_problems": problems,
-            "inbox": inbox,
+            "dashboard": dashboard,
             "repo": {k: v for k, v in repo_state(cfg).items() if k in {"branch", "clean", "on_agent_branch"}},
             "control": engine.state(),
             "approvals": pending_approvals(),
@@ -257,6 +258,43 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
                     return
                 yield ": keepalive\n\n"
                 await asyncio.sleep(0.5)
+
+        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+    def fingerprints() -> dict[str, Any]:
+        """One cheap value per topic the dashboard shows; a topic changed when its value did."""
+        return {
+            "runs": tuple(db.one(
+                "SELECT COUNT(*) n, MAX(id) last, SUM(status = 'running') live, MAX(COALESCE(finished_at, 0)) done, SUM(dismissed) gone "
+                "FROM runs WHERE project = ?", (project,)).values()),
+            "approvals": tuple(db.one(
+                "SELECT COUNT(*) n, MAX(a.id) last, MAX(COALESCE(a.decided_at, 0)) decided FROM approvals a JOIN runs r ON r.id = a.run_id "
+                "WHERE r.project = ?", (project,)).values()),
+            "actions": db.one("SELECT MAX(id) last FROM actions")["last"],
+            "knowledge": tuple(db.one(
+                "SELECT (SELECT COUNT(*) || ':' || COALESCE(MAX(id), 0) || ':' || COALESCE(SUM(status = 'accepted'), 0) FROM learnings WHERE project = ?) l, "
+                "(SELECT MAX(id) FROM playbook_usage WHERE project = ?) u", (project, project)).values()),
+            "control": json.dumps(engine.state(), sort_keys=True, default=str),
+            "tickets": cache["changes"],
+        }
+
+    @r.get("/events", dependencies=[Depends(require_session)])
+    async def events(request: Request):
+        """Tells the dashboard which topics changed, so it refetches those instead of polling everything.
+
+        Reading the local database twice a second is cheap and also sees runs written by other processes
+        (the CLI); the tracker and GitHub are not polled here.
+        """
+        async def gen():
+            seen = fingerprints()
+            while not await request.is_disconnected():
+                await asyncio.sleep(EVENTS_TICK_SECONDS)
+                now = fingerprints()
+                changed = [k for k in now if now[k] != seen[k]]
+                if "runs" in changed:
+                    cache.update(at=0.0)  # a run that ended has moved its ticket on in the tracker
+                seen = now
+                yield f"event: change\ndata: {json.dumps(changed)}\n\n" if changed else ": keepalive\n\n"
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 

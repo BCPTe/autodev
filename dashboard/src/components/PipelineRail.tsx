@@ -1,14 +1,14 @@
-import { useSearchParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import type { Ticket, TicketState } from "@/lib/api"
-import { OFF_TRACK, STATES, TRACK } from "@/lib/status"
+import { STATES, TRACK } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { Lamp } from "@/components/Lamp"
 
 const MAX_CHIPS = 4
 
 function Chips({ tickets }: { tickets: Ticket[] }) {
-  const [, setParams] = useSearchParams()
-  const open = (id: string) => setParams((p) => { const n = new URLSearchParams(p); n.set("ticket", id); return n })
+  const navigate = useNavigate()
+  const open = (id: string) => navigate(`/tickets/${id}`)
   return (
     <ul className="mt-3 space-y-1">
       {tickets.slice(0, MAX_CHIPS).map((t) => (
@@ -16,7 +16,7 @@ function Chips({ tickets }: { tickets: Ticket[] }) {
           <button
             onClick={() => open(t.id)}
             title={t.title}
-            className="block w-full truncate rounded-sm border border-transparent bg-card px-2 py-1 text-left text-[13px] leading-snug shadow-[inset_0_0_0_1px_var(--border)] hover:shadow-[inset_0_0_0_1px_var(--ring)]"
+            className="block w-full truncate rounded-full border border-white/15 bg-card/40 px-3 py-1 text-left text-[13px] leading-snug shadow-sm backdrop-blur-md transition-colors hover:border-ring hover:bg-card/60"
           >
             {t.title}
           </button>
@@ -32,41 +32,23 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
   const by = (s: TicketState) => tickets.filter((t) => t.status === s)
 
   return (
-    <section aria-label="Ticket pipeline">
-      <div className="relative grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-5">
-        <div aria-hidden className="absolute left-[10%] right-[10%] top-[9px] hidden h-px bg-rail sm:block" />
+    <section aria-label="Ticket pipeline" className="flex min-h-[40vh] flex-col justify-center">
+      <div className="relative grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-5">
+        <div aria-hidden className="absolute left-[10%] right-[10%] top-[9px] hidden h-px bg-rail lg:block" />
         {TRACK.map((state) => {
           const list = by(state)
           const meta = STATES[state]
           const attention = meta.owner === "you" && list.length > 0
           return (
             <div key={state} className="relative min-w-0">
-              <div className="flex items-center gap-2 sm:justify-center">
-                <span className={cn("relative z-10 grid size-[18px] place-items-center rounded-full bg-background ring-1 ring-rail", attention && "ring-2 ring-primary")}>
+              <div className="flex items-center gap-2 lg:justify-center">
+                <span className={cn("relative z-10 grid size-5 place-items-center rounded-full bg-background ring-1 ring-rail", attention && "ring-2 ring-primary")}>
                   <Lamp kind={list.length ? meta.lamp : "idle"} live={state === "in_progress" && list.length > 0} />
                 </span>
               </div>
-              <div className="mt-3 flex items-baseline gap-2.5 sm:justify-center">
+              <div className="mt-3 flex items-baseline gap-2.5 lg:justify-center">
                 <h3 className="text-base font-semibold">{meta.label}</h3>
                 <span className={cn("font-display text-3xl leading-none tabular-nums", list.length ? "text-foreground" : "text-muted-foreground")}>{list.length}</span>
-              </div>
-              <Chips tickets={list} />
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="mt-10 grid gap-6 border-t border-dashed pt-5 sm:grid-cols-2">
-        {OFF_TRACK.map((state) => {
-          const list = by(state)
-          const meta = STATES[state]
-          return (
-            <div key={state} className="min-w-0">
-              <div className="flex items-baseline gap-2">
-                <Lamp kind={list.length ? meta.lamp : "idle"} className="translate-y-px" />
-                <h3 className="text-base font-semibold">{meta.label}</h3>
-                <span className="font-display text-2xl leading-none tabular-nums text-muted-foreground">{list.length}</span>
-                <span className="text-xs text-muted-foreground">off the main track</span>
               </div>
               <Chips tickets={list} />
             </div>

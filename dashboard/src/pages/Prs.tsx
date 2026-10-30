@@ -17,7 +17,7 @@ const STATE: Record<Pr["state"], { label: string; lamp: LampKind }> = {
 }
 const CHECKS = { none: "No checks on GitHub", unknown: "Checks could not be read", passing: "Checks passed", failing: "Checks failed", pending: "Checks running" } as const
 
-function mergeBlocker(p: Pr): string | null {
+export function mergeBlocker(p: Pr): string | null {
   if (p.draft) return "The pull request is still a draft"
   if (p.checks?.verdict === "failing") return "GitHub checks failed"
   if (p.checks?.verdict === "unknown") return `GitHub checks could not be read: ${p.checks.reason ?? "check the token permissions"}`
@@ -27,7 +27,7 @@ function mergeBlocker(p: Pr): string | null {
   return null
 }
 
-function PrRow({ p }: { p: Pr }) {
+export function PrRow({ p }: { p: Pr }) {
   const { act, pending } = useAct()
   const [armed, setArmed] = useState(false)
   const [open, setOpen] = useState(false)

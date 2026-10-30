@@ -11,7 +11,8 @@ export function useAct() {
     try {
       const result = await fn()
       if (done) toast.success(typeof done === "function" ? done(result) : done)
-      await qc.invalidateQueries()
+      // refresh in the background: the button is done once the server answered, not when every page reloaded
+      void qc.invalidateQueries()
       return true
     } catch (e) {
       toast.error((e as Error).message)

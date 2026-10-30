@@ -76,7 +76,7 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
           </>
         )}
         {denying ? (
-          <Button size="sm" variant="destructive" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rejected" : "Denied")}><X /> {checkpoint ? "Confirm rejection" : "Confirm denial"}</Button>
+          <Button size="sm" color="red" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rejected" : "Denied")}><X /> {checkpoint ? "Confirm rejection" : "Confirm denial"}</Button>
         ) : (
           <Button size="sm" variant="ghost" disabled={pending} onClick={() => setDenying(true)}><X /> {checkpoint ? "Reject" : "Deny"}</Button>
         )}

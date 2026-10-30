@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom"
 import { PageHeader } from "@/components/PageHeader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -165,7 +166,7 @@ export function Costs() {
             <TableBody>
               {c.by_ticket.map((t) => (
                 <TableRow key={t.ticket_id}>
-                  <TableCell className="max-w-[18rem] truncate">{t.title}</TableCell>
+                  <TableCell className="max-w-[18rem] truncate"><Link to={`/tickets/${t.ticket_id}`} className="underline-offset-4 hover:underline">{t.title}</Link></TableCell>
                   <TableCell className="text-right tabular-nums">{t.runs}</TableCell>
                   <TableCell className={cn("text-right tabular-nums", t.cost >= c.ticket_cap && "text-lamp-red")}>{money(t.cost)}</TableCell>
                 </TableRow>

@@ -1,4 +1,4 @@
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { ExternalLink } from "lucide-react"
 import { Lamp } from "@/components/Lamp"
 import { RunConsole } from "@/components/RunConsole"
@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils"
 export function RunDetail() {
   const id = Number(useParams().id)
   const { data, isError } = useRun(id)
-  const [, setParams] = useSearchParams()
   const now = useNow(1000)
   if (isError) return <p className="text-destructive">Run not found. <Link className="underline" to="/runs">Back to Activity</Link></p>
   if (!data) return <Skeleton className="h-64 w-full" />
@@ -26,7 +25,7 @@ export function RunDetail() {
     <>
       <p className="mb-2 text-sm"><Link className="text-muted-foreground underline-offset-4 hover:underline" to="/runs">Activity</Link></p>
       <div className="mb-6">
-        <h1 className="text-3xl font-semibold">{KIND_LABEL[r.kind]}: {r.ticket_title}</h1>
+        <h1 className="text-3xl font-semibold">{KIND_LABEL[r.kind]}: <Link to={`/tickets/${r.ticket_id}`} className="underline-offset-4 hover:underline">{r.ticket_title}</Link></h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
           <span className="inline-flex items-center gap-2"><Lamp kind={RUN_LAMP[r.status]} live={r.status === "running"} />{RUN_LABEL[r.status]}{r.outcome ? ` · ${r.outcome}` : ""}</span>
           <span className="text-muted-foreground">{shortModel(r.model)}</span>
@@ -34,7 +33,7 @@ export function RunDetail() {
           <span className="tabular-nums text-muted-foreground">{money(r.cost_usd)}</span>
           <span className="text-muted-foreground">started {ago(r.started_at)}</span>
           <StopRun run={r} />
-          {r.kind !== "checks" && <button className="text-primary underline-offset-4 hover:underline" onClick={() => setParams({ ticket: r.ticket_id })}>Open ticket</button>}
+          {r.kind !== "checks" && <Link className="text-primary underline-offset-4 hover:underline" to={`/tickets/${r.ticket_id}`}>Open ticket</Link>}
           {r.pr_url && <a className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline" href={r.pr_url} target="_blank" rel="noreferrer">Pull request <ExternalLink className="size-3.5" /></a>}
         </div>
         {r.branch && <p className="mt-2 font-mono text-[13px]">{r.branch}</p>}

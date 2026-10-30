@@ -181,7 +181,7 @@ export interface RunEvent {
   data: Record<string, unknown> | null
 }
 
-export interface InboxItem {
+export interface DashboardItem {
   kind: "ticket"
   state: TicketState
   ticket: Pick<Ticket, "id" | "title" | "status" | "area" | "priority" | "risk" | "url" | "pr_url" | "branch" | "agent_note" | "updated_at">
@@ -213,7 +213,7 @@ export interface Overview {
   counts: Partial<Record<TicketState, number>>
   running: Run[]
   recent_problems: Run[]
-  inbox: InboxItem[]
+  dashboard: DashboardItem[]
   repo: { branch: string; clean: boolean; on_agent_branch: boolean }
   control: Control
   approvals: Approval[]
