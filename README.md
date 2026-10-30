@@ -75,6 +75,11 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Costs:** every agent session records its tokens (input, output, cache read/write), cost, turns and tool calls; the Costs page breaks them down by stage and model, area and outcome. Agents run without the Claude account's MCP connectors and personal memory (`agents.*.user_mcp`), which had been ~2/3 of the spend. See [docs/COSTS.md](docs/COSTS.md).
 - **Several projects:** `uv run autodev serve` serves every file in `projects/` (or the ones named with `--project`, repeatable). A project switcher appears in the sidebar; mode, daily cap, quiet hours, runs and costs are per project, and each project's agent works on its own checkout.
 
+### Measuring triage (`autodev eval`)
+
+- `uv run autodev eval build` collects a case for every ticket in review or closed whose branch is still in the checkout: the ticket with its human comments, the commit the fix started from, and the source files it changed (tests excluded). Cases live in `data/evals/<project>/cases.jsonl`.
+- `uv run autodev eval run [--model M] [--limit N] [--label "prompt v2"]` triages each case on a temporary worktree at that commit (the bug is still there) and scores: verdict, recall and precision of `suspected_files` against the files the fix changed, whether "What I understood" was filled, cost and turns. The report is saved next to the cases and compared with the previous run, so a prompt change is judged on numbers.
+
 ## Layout
 
 ```

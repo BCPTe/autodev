@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -125,7 +126,6 @@ async def fix(project: str) -> int:
 
 async def cleanup(project: str, remote: bool, dry_run: bool, workspaces: bool) -> int:
     """Deletes agent branches already merged into the base branch (git or a merged pull request)."""
-    import shutil
 
     from autodev import github
     from autodev.sandbox.workspace import WORKSPACES
@@ -152,8 +152,36 @@ async def cleanup(project: str, remote: bool, dry_run: bool, workspaces: bool) -
     return 0
 
 
-def serve(projects: list[str], port: int) -> int:
-    """Serves the dashboard for the given projects, or for every file in projects/ when none is named."""
+async def evaluate(project: str, action: str, model: str | None, limit: int | None, label: str) -> int:
+    from autodev import evals
+
+    cfg = load_project(f"projects/{project}.yaml")
+    if action == "build":
+        tracker = NotionTracker(cfg.tracker, os.environ["NOTION_TOKEN"])
+        try:
+            n, skipped = await evals.build_cases(cfg, project, tracker)
+        finally:
+            await tracker.aclose()
+        print(f"{n} cases written to {evals.cases_path(project)}")
+        for s in skipped:
+            print(f"  skipped: {s}")
+        return 0
+    cases = evals.load_cases(project)[:limit]
+    rows = []
+    for i, case in enumerate(cases, 1):
+        print(f"[{i}/{len(cases)}] {case['ticket']['title']}", flush=True)
+        rows.append(await evals.run_case(cfg, case, model))
+    path = evals.save_report(project, label, rows)
+    print("\n" + evals.format_report(rows, evals.previous_report(project, path)))
+    print(f"\nreport: {path}")
+    return 0
+
+
+def serve(projects: list[str], port: int, dev: bool = False) -> int:
+    """Serves the dashboard for the given projects, or for every file in projects/ when none is named.
+
+    With dev, also runs the Vite dev server (hot reload) proxying /api to this backend.
+    """
     import uvicorn
 
     from autodev.engine import Engine
@@ -177,10 +205,24 @@ def serve(projects: list[str], port: int) -> int:
     first, *rest = (context(n) for n in names)
     app = create_app(first.cfg, first.project, db, first.tracker, engine=first.engine, run_loop=True, others=rest)
     code = app.state.auth.setup_code
-    print(f"\nautodev dashboard: http://localhost:{port}")
+    vite = None
+    if dev:
+        dashboard = Path(__file__).resolve().parents[2] / "dashboard"
+        if not shutil.which("npm"):
+            print("--dev needs npm")
+            return 1
+        if not (dashboard / "node_modules").is_dir():
+            subprocess.run(["npm", "ci"], cwd=dashboard, check=True)
+        env = {**os.environ, "AUTODEV_API": f"http://127.0.0.1:{port}"}
+        vite = subprocess.Popen(["npm", "run", "dev"], cwd=dashboard, env=env)
+    print(f"\nautodev dashboard: http://localhost:{5173 if dev else port}")
     if code:
         print(f"First setup: on the page enter the code  {code}  and choose a password.\n")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    finally:
+        if vite:
+            vite.terminate()
     return 0
 
 
@@ -200,16 +242,23 @@ def main() -> None:
     p.add_argument("--project", default=None)
     t = sub.add_parser("triage", help="triage all ready tickets")
     t.add_argument("--project", default=None)
-    f = sub.add_parser("fix", help="fix all approved tickets (status In lavorazione)")
+    f = sub.add_parser("fix", help="fix all approved tickets (status In progress)")
     f.add_argument("--project", default=None)
     cl = sub.add_parser("cleanup", help="delete merged agent branches")
     cl.add_argument("--project", default=None)
     cl.add_argument("--remote", action="store_true", help="also delete them on GitHub")
     cl.add_argument("--dry-run", action="store_true")
     cl.add_argument("--workspaces", action="store_true", help="also remove leftover clones in workspaces/")
+    ev = sub.add_parser("eval", help="replay triage on already fixed tickets and score it")
+    ev.add_argument("action", choices=["build", "run"], help="build: collect cases from the tracker; run: triage them")
+    ev.add_argument("--project", default=None)
+    ev.add_argument("--model", default=None, help="one model instead of the triage cascade")
+    ev.add_argument("--limit", type=int, default=None)
+    ev.add_argument("--label", default="", help="name for this run in the report, e.g. the prompt change")
     sv = sub.add_parser("serve", help="start the local dashboard")
     sv.add_argument("--project", action="append", default=[], help="repeatable; default: every file in projects/")
     sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--dev", action="store_true", help="also run the Vite dev server with frontend hot reload (http://localhost:5173)")
     args = parser.parse_args()
     if args.cmd != "serve":
         args.project = args.project or default_project()
@@ -218,9 +267,11 @@ def main() -> None:
     if args.cmd == "cleanup":
         sys.exit(asyncio.run(cleanup(args.project, args.remote, args.dry_run, args.workspaces)))
     if args.cmd == "serve":
-        sys.exit(serve(args.project, args.port))
+        sys.exit(serve(args.project, args.port, args.dev))
     if args.cmd == "fix":
         sys.exit(asyncio.run(fix(args.project)))
+    if args.cmd == "eval":
+        sys.exit(asyncio.run(evaluate(args.project, args.action, args.model, args.limit, args.label)))
     if args.cmd == "triage":
         sys.exit(asyncio.run(triage(args.project)))
 
