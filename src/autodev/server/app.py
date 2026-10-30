@@ -279,6 +279,11 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             raise HTTPException(422, str(e))
         return engine.state()
 
+    @r.post("/control/check-now", dependencies=[Depends(require_session)])
+    def check_now():
+        engine.check_now()
+        return {"ok": True}
+
     @r.post("/control/stop-all", dependencies=[Depends(require_session)])
     def stop_all():
         return {"stopped": engine.stop()}

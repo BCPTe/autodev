@@ -131,7 +131,8 @@ class Engine:
         self._launching = False
         self._tasks: set[asyncio.Task] = set()
         self._tried: dict[tuple[str, str], float] = {}
-        self._last_tick: float | None = None
+        # when the automatic loop looks at the board next (None while it is looking)
+        self._next_check: float | None = clock() + cfg.autonomy.poll_seconds
         self._learn_queue: dict[str, Ticket] = {}
 
     # ---- settings ------------------------------------------------------------------------
@@ -150,6 +151,7 @@ class Engine:
         if mode != self.mode:
             self.db.set_setting(self._k("mode"), mode)
             self.db.audit(actor, "mode", detail=mode)
+            self._next_check = self._clock() + self.cfg.autonomy.poll_seconds
         self.notice = None
 
     @property
@@ -204,6 +206,10 @@ class Engine:
         self.db.audit(actor, "daily_cap", detail=f"{usd:.2f}")
         self.notice = None
 
+    def check_now(self) -> None:
+        """The automatic loop looks at the board within a second."""
+        self._next_check = self._clock()
+
     def busy(self) -> bool:
         return self._launching or bool(self.db.one("SELECT id FROM runs WHERE status = 'running' AND project = ?", (self.project,)))
 
@@ -227,7 +233,7 @@ class Engine:
             "permission_policy": self.permission_policy,
             "can_notify": notify.resolve_command(self.cfg.autonomy.notify_command) is not None,
             "poll_seconds": poll,
-            "next_check": (self._last_tick + poll) if self._last_tick and self.mode in ("auto", "supervised") else None,
+            "next_check": self._next_check if self.mode in ("auto", "supervised") else None,
         }
 
     # ---- starting and stopping jobs ------------------------------------------------------
@@ -366,13 +372,17 @@ class Engine:
     # ---- the automatic part --------------------------------------------------------------
     async def run_forever(self) -> None:
         while True:
+            await asyncio.sleep(1)
+            if self._next_check is None or self._clock() < self._next_check:
+                continue
+            self._next_check = None
             try:
                 await self.housekeeping()
                 self.drain_learn()
                 await self.tick()
             except Exception as e:  # a Notion hiccup must not kill the loop
                 self.notice = f"automatic check failed: {e}"
-            await asyncio.sleep(self.cfg.autonomy.poll_seconds)
+            self._next_check = self._clock() + self.cfg.autonomy.poll_seconds
 
     async def housekeeping(self) -> list[str]:
         """Keeps Notion in line with GitHub: a merged PR closes its ticket, a PR closed unmerged escalates it."""
@@ -414,7 +424,6 @@ class Engine:
 
     async def tick(self) -> str | None:
         """One look at the board: starts at most one job. Returns what it did, for tests and logs."""
-        self._last_tick = self._clock()
         if self.mode not in ("auto", "supervised") or self.my_turn or self.busy():
             return None
         if in_quiet_hours(self.quiet_hours, self._clock()):

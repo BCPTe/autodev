@@ -304,3 +304,18 @@ async def test_projects_keep_separate_modes_caps_and_busy_state(tmp_path, fakes)
     await a.wait_idle()
     db.execute("INSERT INTO runs(project, ticket_id, ticket_title, kind, status, started_at, cost_usd) VALUES('alpha','z','z','fix','done',?,9)", (__import__("time").time(),))
     assert a.state()["spent_today"] >= 9 and b.state()["spent_today"] == 0
+
+
+
+def test_switching_mode_starts_the_countdown_and_check_now_ends_it(tmp_path):
+    e, _, _ = make(tmp_path, [])
+    clock = [1000.0]
+    e._clock = lambda: clock[0]
+    assert e.state()["next_check"] is None  # manual: no countdown shown
+    e.set_mode("auto")
+    assert e.state()["next_check"] == 1000.0 + e.cfg.autonomy.poll_seconds
+    clock[0] = 1030.0
+    e.set_mode("supervised")
+    assert e.state()["next_check"] == 1030.0 + e.cfg.autonomy.poll_seconds
+    e.check_now()
+    assert e.state()["next_check"] == 1030.0
