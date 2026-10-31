@@ -36,4 +36,4 @@ uv run python e2e/autodev/demo_server.py 8799 /tmp/autodev-demo.db
 
 ## License and contributions
 
-autodev is released under the [FSL-1.1-ALv2](LICENSE). The copyright holders keep the right to license future versions differently, so **for now we only accept pull requests from contributors who agree to a Contributor License Agreement** that grants this right. Open an issue first; we will send the CLA before reviewing code. Bug reports and ideas are always welcome without one.
+autodev is released under the [FSL-1.1-ALv2](LICENSE). The copyright holders keep the right to license future versions differently, so **for now we only accept pull requests from contributors who agree to a Contributor License Agreement** that grants this right. When you open a pull request, the CLA bot comments with the [agreement](docs/CLA.md); sign it once by replying `I have read the CLA Document and I hereby sign the CLA`, and the check turns green for this and all your future PRs. Bug reports and ideas are always welcome without one.
