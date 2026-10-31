@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, Lightbulb, LogOut, Menu, Moon, RotateCw, Settings, Sun, Ticket } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -121,18 +121,24 @@ function Agents() {
   );
 }
 
+// one shared clock, ticking every second, so render never reads Date.now() itself
+let clockNow = Date.now();
+const clockSubscribe = (notify: () => void) => {
+  const t = setInterval(() => {
+    clockNow = Date.now();
+    notify();
+  }, 1000);
+  return () => clearInterval(t);
+};
+const clockSnapshot = () => clockNow;
+
 function NextCheck() {
   const { data } = useOverview();
   const { act, pending } = useAct();
-  const [, rerender] = useState(0);
+  const now = useSyncExternalStore(clockSubscribe, clockSnapshot);
   const next = data?.control.next_check ?? null;
-  useEffect(() => {
-    const t = setInterval(() => rerender((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, []);
   if (next === null) return null;
-  // read the clock at render: a value fresh from the server must not be compared with a time up to 1s old
-  const left = Math.max(0, Math.ceil(next - Date.now() / 1000));
+  const left = Math.max(0, Math.ceil(next - now / 1000));
   return (
     <span className="flex items-center gap-1.5 text-sm text-muted-foreground" title="Time until the next check of the open tickets">
       <span className="max-sm:hidden">Next check</span>{" "}
@@ -235,8 +241,10 @@ export function Shell() {
   // the ticket page works side by side (decisions | live run or diff), so it uses the full width
   const { dark } = useTheme();
   // below lg the sidebar is a drawer; following a link closes it
-  const [drawer, setDrawer] = useState(false);
-  useEffect(() => setDrawer(false), [pathname]);
+  // remember the page it was opened on: navigating elsewhere closes it without an effect
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const drawer = openOn === pathname;
+  const setDrawer = (open: boolean) => setOpenOn(open ? pathname : null);
 
   return (
     <div

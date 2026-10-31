@@ -266,11 +266,6 @@ function AnalyzedCard({ item }: { item: Item }) {
   );
 }
 
-/** Card with direct actions for tickets that have them; other states stay plain rows. */
-export function hasActionCard(state: Item["state"]) {
-  return state === "review" || state === "analyzed";
-}
-
 export function TicketActionCard({ item }: { item: Item }) {
   return item.state === "review" ? <ReviewCard item={item} /> : <AnalyzedCard item={item} />;
 }
