@@ -17,7 +17,7 @@ dependencies = [
 autodev = "autodev.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.23.1"]
 
 [build-system]
 requires = ["hatchling"]
