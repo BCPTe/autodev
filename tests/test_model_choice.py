@@ -6,7 +6,7 @@ from autodev.agents.fix import pick_model
 from autodev.config import load_project
 from autodev.models import Status, Ticket
 
-CFG = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+CFG = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 
 
 def ticket(model):

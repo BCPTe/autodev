@@ -2,7 +2,7 @@
 
 Orchestrator that turns tracker tickets (Notion) into verified pull requests using Claude agents. Project-agnostic by design: each target repo is described by a file in `projects/`.
 
-First target: Acme (`projects/demo.yaml`).
+Start from `projects/example.yaml.dist`; `projects/sandbox.yaml.dist` is a toy project for cheap trials.
 
 ## Setup
 

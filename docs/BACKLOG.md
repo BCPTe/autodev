@@ -14,9 +14,9 @@ Ordered by what unblocks the most. Done items live in git history, not here.
 - Untested against the real services: the retrospective with the real Claude API, `git diff --stat` on a real merged/deleted branch, and the auto trigger from a real GitHub merge.
 
 ## Later
-4. **CI on GitHub for demo** (pytest, vitest, tsc on every PR) so PRs carry checks that do not depend on the agent.
+4. **CI on GitHub for the target repo** (pytest, vitest, tsc on every PR) so PRs carry checks that do not depend on the agent.
 6. **Notion views.** Inbox (New + Authorized), In review, Needs info, Closed.
-7. **Automatic UI check.** With in-place mode the Docker stack already serves the ticket branch, so Playwright (`e2e/demo`) can run against `localhost:3000` as part of verification for changes that touch the frontend.
+7. **Automatic UI check.** With in-place mode the Docker stack already serves the ticket branch, so Playwright (an end-to-end suite in the target repo) can run against `localhost:3000` as part of verification for changes that touch the frontend.
 8. **Model column for triage.** Today the "Model" column only drives the fix agent; triage always cascades Haiku -> Sonnet.
 9. **Mutation testing as a tool.** Move the AST mutation sampler used for the test audit into this repo and run it on demand per module.
 10. **Triage should recognise duplicates** (the old "Duplicato" state was dropped because nothing could set it).

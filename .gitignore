@@ -6,3 +6,46 @@ __pycache__/
 workspaces/
 .cache/
 data/
+
+# Private target projects (keep example.* and sandbox.* only)
+projects/*
+!projects/example.yaml.dist
+!projects/example.area_map.md
+!projects/sandbox.yaml.dist
+!projects/sandbox.area_map.md
+e2e/*/node_modules/
+e2e/private/
+
+# Claude Code local state / worktrees
+.claude/
+
+# Env, secrets, keys
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local state & caches
+*.db
+*.sqlite*
+.venv/
+node_modules/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Playwright / e2e artifacts
+test-results/
+playwright-report/
+playwright/.auth/
+.auth/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+docs/*_TEST_AUDIT.md

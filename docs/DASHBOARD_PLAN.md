@@ -8,7 +8,7 @@ Docker and the Claude Code login, so it is a local web app, not a hosted service
 - **Notion stays the ticket source of truth.** The dashboard reads and writes it; it does not
   replace it. Everything the dashboard stores itself (runs, events, chat, costs) is in local SQLite.
 - **Every automatic action can become a manual one.** Autonomy is a setting, not a code path.
-- **One writer per checkout.** In-place mode means one agent at a time may touch `demo/`; the
+- **One writer per checkout.** In-place mode means one agent at a time may touch the target checkout; the
   dashboard shows who holds it, and lets you take it ("my turn") so automation waits.
 - **Nothing the agents read is trusted.** Ticket text and comments are rendered as plain text.
 
@@ -72,7 +72,7 @@ prompt), which is what the dashboard needs. So a run becomes a **controllable se
 - **State**: SQLite (`runs`, `events`, `messages`, `approvals`, `settings`). Events are append-only
   and drive both the live view and the audit trail ("who decided this: you or Auto").
 - **Live updates**: Server-Sent Events from the event stream; commands over REST.
-- **Frontend**: React + Tailwind + shadcn (same family as Acme), built to static files and served
+- **Frontend**: React + Tailwind + shadcn (shadcn family), built to static files and served
   by the same FastAPI process: one port, one command, no Node at runtime.
 - **Existing pieces kept**: tracker, pipeline, gate, workspace. The CLI keeps working on top of the
   same job layer.
@@ -89,7 +89,7 @@ prompt), which is what the dashboard needs. So a run becomes a **controllable se
 
 ## Risks to handle
 - A dashboard that can run agents is a remote-control surface: localhost only, token, no CORS to the world.
-- Two writers on `demo/`: the lock and the clean-tree check stay the source of safety.
+- Two writers on the target checkout: the lock and the clean-tree check stay the source of safety.
 - Live sessions are memory-resident: if the process restarts, running sessions are resumed from the
   stored session id, never silently lost.
 - Cost: Supervised and chat sessions can run long; the caps apply per ticket and per day regardless of mode.

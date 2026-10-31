@@ -35,14 +35,14 @@ def _page(authorized: bool = True) -> dict:
 
 
 def test_project_config_loads():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     assert cfg.base_branch == "staging"
     assert cfg.tracker.status_map[Status.NEW] == "New"
 
 
 @respx.mock
 async def test_fetch_ready_parses_ticket_and_body():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     respx.post(f"{API}/data_sources/{cfg.tracker.data_source_id}/query").mock(
         return_value=httpx.Response(200, json={"results": [_page()]})
     )
@@ -82,7 +82,7 @@ async def test_fetch_ready_parses_ticket_and_body():
 
 @respx.mock
 async def test_bot_comments_are_recognised_by_display_name_and_returned_for_the_fix_agent():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     respx.get(f"{API}/comments").mock(
         return_value=httpx.Response(
             200,
@@ -102,7 +102,7 @@ async def test_bot_comments_are_recognised_by_display_name_and_returned_for_the_
 
 
 def test_tracker_column_names_can_be_overridden_per_project():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     assert cfg.tracker.prop("title") == "Title"
     cfg.tracker.properties = {"title": "Name"}
     assert cfg.tracker.prop("title") == "Name"
@@ -111,7 +111,7 @@ def test_tracker_column_names_can_be_overridden_per_project():
 
 @respx.mock
 async def test_comment_typed_in_the_dashboard_counts_as_human_for_the_agents():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     posted = respx.post(f"{API}/comments").mock(return_value=httpx.Response(200, json={}))
     respx.get(f"{API}/comments").mock(
         return_value=httpx.Response(
@@ -132,7 +132,7 @@ async def test_comment_typed_in_the_dashboard_counts_as_human_for_the_agents():
 
 @respx.mock
 async def test_authorized_and_model_are_written_to_their_columns():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     patch = respx.patch(f"{API}/pages/page-1").mock(return_value=httpx.Response(200, json={}))
     tracker = NotionTracker(cfg.tracker, token="x")
     await tracker.update("page-1", authorized=True, model="Opus")
@@ -144,7 +144,7 @@ async def test_authorized_and_model_are_written_to_their_columns():
 
 @respx.mock
 async def test_a_status_label_missing_from_the_project_file_is_an_error_not_an_empty_board():
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     page = _page()
     page["properties"]["Status"] = {"status": {"name": "Nuovo"}}
     respx.post(f"{API}/data_sources/{cfg.tracker.data_source_id}/query").mock(
@@ -160,7 +160,7 @@ async def test_a_status_label_missing_from_the_project_file_is_an_error_not_an_e
 async def test_a_comment_from_the_dashboard_carries_the_persons_name_instead_of_the_bots():
     import json
 
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     posted = respx.post(f"{API}/comments").mock(return_value=httpx.Response(200, json={}))
     tracker = NotionTracker(cfg.tracker, token="x")
     await tracker.comment("page-1", "Only the SCIA SUE", as_human=True, author="Christian")
@@ -174,7 +174,7 @@ async def test_a_comment_from_the_dashboard_carries_the_persons_name_instead_of_
 async def test_if_notion_refuses_the_custom_name_the_comment_still_goes_out_marked_as_human():
     import json
 
-    cfg = load_project(ROOT / "projects" / "demo.yaml")
+    cfg = load_project(ROOT / "tests" / "fixtures" / "demo.yaml")
     route = respx.post(f"{API}/comments").mock(side_effect=[httpx.Response(400, json={}), httpx.Response(200, json={})])
     tracker = NotionTracker(cfg.tracker, token="x")
     await tracker.comment("page-1", "Hello", as_human=True, author="Christian")

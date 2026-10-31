@@ -1,6 +1,6 @@
 # Configuring a project
 
-Everything project-specific lives in `projects/<name>.yaml` plus two secrets in `.env`. The code knows nothing about any particular project. `projects/example.yaml.dist` is a commented template (copy it to `projects/<name>.yaml`; `.dist` files are ignored by autodev); `projects/demo.yaml` is a real one.
+Everything project-specific lives in `projects/<name>.yaml` plus two secrets in `.env`. The code knows nothing about any particular project. `projects/example.yaml.dist` is a commented template (copy it to `projects/<name>.yaml`; `.dist` files are ignored by autodev); `projects/sandbox.yaml.dist` is a small working one.
 
 To check what you wrote: `uv run autodev check` (Notion reachable? columns present? GitHub token usable?).
 
@@ -100,4 +100,4 @@ Optional. A short, versioned file of facts about the project (`projects/<name>.k
 The file has one `## where`, `## domain`, `## gotcha` and `## command` section, one bullet per entry, with an optional trailing metadata comment (`id`, source ticket, date, `area`, `paths`). You can edit it by hand; when you accept or delete an entry from the dashboard the file is rewritten in this format.
 
 ### Present in the file but not used by the code
-`commands` and `environments` (in `demo.yaml`) are notes for humans today; no part of autodev reads them. You can omit them.
+`commands` and `environments` (in the project YAML) are notes for humans today; no part of autodev reads them. You can omit them.

@@ -7,7 +7,7 @@ import respx
 from autodev.config import load_project
 from autodev.github import verify_access
 
-CFG = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+CFG = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 REPO = f"https://api.github.com/repos/{CFG.pr.slug}"
 
 

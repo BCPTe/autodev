@@ -11,7 +11,7 @@ from autodev.models import Comment, Status, Ticket
 from autodev.server.app import create_app
 from autodev.server.auth import MAX_FAILURES
 
-CFG = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+CFG = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 PASSWORD = "una-password-lunga-1"
 
 

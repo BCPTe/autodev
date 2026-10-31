@@ -1,0 +1,71 @@
+# Toy project to try autodev cheaply: a tiny shop library with known bugs (repo: /path/to/autodev-sandbox).
+name: Sandbox shop
+language: Italian
+repo: /path/to/autodev-sandbox-origin.git
+base_branch: main
+local_path: /path/to/autodev-sandbox
+workspace_mode: inplace
+
+tracker:
+  type: notion
+  database_id: <notion-database-id>
+  data_source_id: <notion-data-source-id>
+  status_map:
+    new: "New"
+    needs_info: "Needs info"
+    analyzed: "Analysed"
+    in_progress: "In progress"
+    review: "In review"
+    escalated: "Needs a human"
+    closed: "Closed"
+
+area_map: sandbox.area_map.md
+python: /path/to/autodev-sandbox/.venv/bin/python
+min_body_chars: 40
+
+agents:
+  triage:
+    models: [claude-haiku-5-5, claude-sonnet-5-5]
+    max_turns: 15
+  fix:
+    models: [claude-sonnet-5-5]
+    max_turns: 20
+    allowed_bash:
+      - "{python} -m pytest"
+      - "git status"
+      - "git diff"
+      - "git log"
+    commands: |
+      Run everything from the repository root; never use `cd`.
+      Tests: {python} -m pytest -q <paths>
+      Inspect changes: git status, git diff, git log
+
+checks:
+  - name: tests
+    cmd: "{python} -m pytest -q -p no:cacheprovider"
+regressions:
+  - test_globs: ["tests/*.py"]
+    cmd: "{python} -m pytest -q -p no:cacheprovider {tests}"
+
+risk:
+  never_automerge: []
+limits:
+  max_attempts: 2
+  max_fix_runs: 2
+  max_files: 5
+  budget_usd_per_ticket: 1
+  daily_budget_usd: 3
+
+pr:
+  create: false
+model_choices:
+  Haiku: claude-haiku-5-5
+  Sonnet: claude-sonnet-5-5
+  Opus: claude-opus-5-5
+
+autonomy:
+  default_mode: manual
+
+knowledge:
+  enabled: true
+  max_chars: 3000

@@ -8,7 +8,7 @@ from autodev.config import load_project
 from autodev.models import Status, Ticket
 from autodev.pipeline import prefilter
 
-CFG = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+CFG = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 
 
 def _ticket(body: str) -> Ticket:

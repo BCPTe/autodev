@@ -6,7 +6,7 @@ import pytest
 from autodev.config import load_project
 from autodev.server import repo
 
-CFG = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+CFG = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 
 
 def git(path: Path, *args: str) -> str:

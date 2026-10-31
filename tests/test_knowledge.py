@@ -20,7 +20,7 @@ from autodev.server.app import create_app
 from tests.test_engine import Tracker as EngineTracker
 from tests.test_server import PASSWORD, FakeTracker, seed_run
 
-BASE = load_project(Path(__file__).parent.parent / "projects" / "demo.yaml")
+BASE = load_project(Path(__file__).parent.parent / "tests" / "fixtures" / "demo.yaml")
 
 
 @pytest.fixture

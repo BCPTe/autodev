@@ -1,0 +1,96 @@
+repo: git@github.com:acme/webapp.git
+base_branch: staging
+local_path: /tmp
+workspace_mode: inplace
+tracker:
+  type: notion
+  database_id: "00000000000000000000000000000000"
+  data_source_id: 00000000-0000-0000-0000-000000000000
+  status_map:
+    new: "New"
+    needs_info: "Needs info"
+    analyzed: "Analysed"
+    in_progress: "In progress"
+    review: "In review"
+    escalated: "Needs a human"
+    closed: "Closed"
+commands:
+  setup: make up-detached
+  test_backend: docker compose exec backend pytest
+  typecheck: cd apps/frontend && npm run lint
+environments:
+  local:
+    url: http://localhost:3000
+    auth: supabase_local_test_user
+  staging:
+    url: https://staging.example.com
+risk:
+  never_automerge:
+    - apps/backend/app/api/billing.py
+    - apps/backend/app/core/auth.py
+    - apps/backend/alembic/**
+limits:
+  max_attempts: 3
+  max_files: 10
+  budget_usd_per_ticket: 3
+agents:
+  triage:
+    models: [claude-haiku-5-5, claude-sonnet-5-5]
+    max_turns: 25
+  fix:
+    models: [claude-sonnet-5-5, claude-sonnet-5-5, claude-opus-5-5]
+    max_turns: 30
+    resume_retries: true
+    allowed_bash:
+      - "{python} -m pytest"
+      - "git status"
+      - "git diff"
+      - "git log"
+      - "npm --prefix apps/frontend"
+      - "tail"
+      - "head"
+      - "grep"
+      - "wc"
+      - "echo"
+    commands: |
+      Run everything from the repository root; never use `cd`. You may pipe output through tail, head, grep or wc.
+      Backend tests: {python} -m pytest -q -c apps/backend/pytest.ini <paths under apps/backend/tests>
+      Frontend tests (Vitest): npm --prefix apps/frontend test -- <path relative to apps/frontend>
+      Frontend typecheck: npm --prefix apps/frontend run lint
+      Inspect changes: git status, git diff, git log
+area_map: demo.area_map.md
+min_body_chars: 40
+python: /tmp/apps/backend/.venv/bin/python
+exclude:
+  - apps/backend/data/knowledge_base
+  - apps/frontend/node_modules
+prepare:
+  - mkdir -p apps/backend/data && cp -r data/knowledge_base apps/backend/data/
+  - ln -s {local_path}/apps/frontend/node_modules apps/frontend/node_modules
+checks:
+  - name: backend tests
+    cwd: apps/backend
+    cmd: "{python} -m pytest -q -p no:cacheprovider"
+  - name: frontend typecheck
+    cwd: apps/frontend
+    cmd: npm run lint
+    when_changed: [apps/frontend/]
+  - name: frontend tests
+    cwd: apps/frontend
+    cmd: npm test
+    when_changed: [apps/frontend/]
+regressions:
+  - test_globs: ["apps/backend/tests/*.py"]
+    cwd: apps/backend
+    cmd: "{python} -m pytest -q -p no:cacheprovider {tests}"
+  - test_globs: ["apps/frontend/*.test.ts", "apps/frontend/*.test.tsx"]
+    cwd: apps/frontend
+    cmd: "npx vitest run {tests}"
+pr:
+  create: true
+  slug: acme/webapp
+model_choices:
+  Haiku: claude-haiku-5-5
+  Sonnet: claude-sonnet-5-5
+  Opus: claude-opus-5-5
+  Fable: claude-fable-5-1
