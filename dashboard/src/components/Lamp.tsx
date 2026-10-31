@@ -11,5 +11,5 @@ const COLOR: Record<LampKind, string> = {
 }
 
 export function Lamp({ kind, live = false, className }: { kind: LampKind; live?: boolean; className?: string }) {
-  return <span aria-hidden className={cn("inline-block size-2.5 shrink-0 rounded-full", COLOR[kind], live && "lamp-live", className)} />
+  return <span aria-hidden className={cn("inline-block size-2.5 shrink-0 rounded-full", COLOR[kind], live && "animate-pulse motion-reduce:animate-none", className)} />
 }

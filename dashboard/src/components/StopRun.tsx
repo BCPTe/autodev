@@ -7,8 +7,6 @@ export function StopRun({ run }: { run: Run }) {
   const { act, pending } = useAct()
   if (run.status !== "running") return null
   return (
-    <Button size="xs" variant="outline" disabled={pending || run.cancel_requested} onClick={() => act(() => post(`/api/runs/${run.id}/cancel`, {}), "Stop requested")}>
-      <OctagonX /> {run.cancel_requested ? "Stopping..." : "Stop"}
-    </Button>
+    <Button size="xs" variant="outline" disabled={pending || run.cancel_requested} onClick={() => act(() => post(`/api/runs/${run.id}/cancel`, {}), "Stop requested")} leftIcon={<OctagonX />}>{run.cancel_requested ? "Stopping..." : "Stop"}</Button>
   )
 }

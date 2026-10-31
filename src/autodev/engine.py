@@ -194,6 +194,8 @@ class Engine:
     def set_notifications(self, on: bool, actor: str = "user") -> None:
         self.db.set_setting(self._k("notifications"), "1" if on else "0")
         self.db.audit(actor, "notifications", detail="on" if on else "off")
+        if on:
+            self.notify("autodev: notifications on", "This is an example: you'll get one like this when something needs you.")
 
     def notify(self, title: str, body: str) -> None:
         if self.notifications:
@@ -206,8 +208,6 @@ class Engine:
         self.db.audit(actor, "daily_cap", detail=f"{usd:.2f}")
         self.notice = None
 
-    def check_now(self) -> None:
-        """The automatic loop looks at the board within a second."""
     RESETTABLE = ("quiet_hours", "permission_policy", "daily_budget_usd")
 
     def overrides(self) -> list[str]:
@@ -223,6 +223,8 @@ class Engine:
         if name == "daily_budget_usd":
             self.notice = None
 
+    def check_now(self) -> None:
+        """The automatic loop looks at the board within a second."""
         self._next_check = self._clock()
 
     def busy(self) -> bool:
@@ -246,9 +248,9 @@ class Engine:
             "quiet": in_quiet_hours(self.quiet_hours, self._clock()),
             "notifications": self.notifications,
             "permission_policy": self.permission_policy,
+            "overrides": self.overrides(),
             "can_notify": notify.resolve_command(self.cfg.autonomy.notify_command) is not None,
             "poll_seconds": poll,
-            "overrides": self.overrides(),
             "next_check": self._next_check if self.mode in ("auto", "supervised") else None,
         }
 

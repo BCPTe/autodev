@@ -48,7 +48,7 @@ function BranchPill({ branch, clean }: { branch: string; clean: boolean }) {
   };
   return (
     <span className="flex flex-wrap items-center gap-2">
-      <span>On active branch:</span>
+      <span className="select-none">On active branch:</span>
       <span className="inline-flex min-w-0 items-center gap-3 rounded-full inset-shadow-sm border bg-card px-2.5 py-1 font-mono text-[13px] text-foreground">
         <GitBranch className="size-4 shrink-0 text-primary ml-1.5" />
         <span className="truncate">{branch}</span>
@@ -87,7 +87,7 @@ function LastRunTerminal({ run }: { run: Run }) {
         <span className="size-2.5 rounded-full bg-red-400/70" />
         <span className="size-2.5 rounded-full bg-amber-400/70" />
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
-        <span className="ml-2 text-xs text-slate-500">last run · {ago(run.finished_at ?? run.started_at)}</span>
+        <span className="ml-2 text-xs text-slate-500 select-none">last run · {ago(run.finished_at ?? run.started_at)}</span>
       </div>
       <div className="space-y-0.5 p-3">
         <p className="truncate">
@@ -114,7 +114,7 @@ function LastRunTerminal({ run }: { run: Run }) {
 }
 
 export function Now() {
-  const { data: tickets } = useTickets();
+  const { data: tickets, error: ticketsError } = useTickets();
   const { data: overview } = useOverview();
   const { data: runs } = useRuns();
   const navigate = useNavigate();
@@ -130,7 +130,16 @@ export function Now() {
     <>
       <PageHeader title="Dashboard">{overview?.repo && <BranchPill branch={overview.repo.branch} clean={overview.repo.clean} />}</PageHeader>
 
-      {tickets ? <PipelineRail tickets={tickets.tickets} /> : <Skeleton className="min-h-[50vh] w-full" />}
+      {tickets ? (
+        <PipelineRail tickets={tickets.tickets} />
+      ) : ticketsError ? (
+        <div role="alert" className="rounded-xl border border-lamp-red/40 bg-lamp-red/10 p-4 text-sm">
+          <p className="font-medium">Could not load the tickets for this project</p>
+          <p className="mt-1 break-words text-muted-foreground">{ticketsError.message}</p>
+        </div>
+      ) : (
+        <Skeleton className="min-h-[50vh] w-full" />
+      )}
 
       <div className="mt-14 grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
         <section aria-labelledby="needs-you">
@@ -197,7 +206,7 @@ export function Now() {
           </h2>
           {overview && overview.running.length === 0 && (
             <div className="py-3">
-              <p className="text-muted-foreground">No agent is running.</p>
+              <p className="text-muted-foreground select-none">No agent is running.</p>
               {last && <LastRunTerminal run={last} />}
             </div>
           )}

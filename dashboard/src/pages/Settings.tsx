@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
 import { put } from "@/lib/api"
@@ -14,17 +15,36 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="grid gap-1 border-b py-2.5 sm:grid-cols-[13rem_1fr] first:border-t">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
+      <dd className="min-w-0 wrap-break-word">{children}</dd>
     </div>
   )
 }
 
-function ResetToConfig({ name }: { name: string }) {
+const OVERRIDE_LABELS: Record<string, string> = {
+  mode: "Mode",
+  permission_policy: "Command permissions",
+  quiet_hours: "Quiet hours",
+  notifications: "Notifications",
+  daily_budget_usd: "Daily cap",
+}
+
+function ResetOverrides({ overrides, project }: { overrides: string[]; project: string }) {
   const { act, pending } = useAct()
+  const labels = overrides.map((o) => OVERRIDE_LABELS[o] ?? o).join(", ")
   return (
-    <Button type="button" size="sm" variant="ghost" loading={pending} onClick={() => act(() => put("/api/control", { reset: [name] }), "Back to the project file value")}>
-      Reset to project file
-    </Button>
+    <div role="status" className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+      <div className="min-w-0 text-sm">
+        <p className="font-medium">Some settings differ from the project file</p>
+        <p className="text-muted-foreground">Changed from the dashboard: {labels}. The values in <span className="font-mono">projects/{project}.yaml</span> are overridden.</p>
+      </div>
+      <ConfirmDialog
+        trigger={<Button type="button" size="sm" color="red" loading={pending}>Reset to project file</Button>}
+        title="Reset to project file?"
+        description={`Every change made from the dashboard (${labels}) will be discarded and the values from the project file will apply again.`}
+        confirmLabel="Reset all"
+        onConfirm={() => act(() => put("/api/control", { reset: overrides }), "Back to the project file values")}
+      />
+    </div>
   )
 }
 
@@ -108,6 +128,8 @@ export function Settings() {
     <>
       <PageHeader title="Settings">You can change autonomy, quiet hours and the daily cap here. Everything else lives in <span className="font-mono">projects/{c.project}.yaml</span></PageHeader>
 
+      {control && control.overrides.length > 0 && <ResetOverrides overrides={control.overrides} project={c.project} />}
+
       <div className="space-y-12">
         <section className="grid gap-x-10 gap-y-2 lg:grid-cols-[13rem_minmax(0,1fr)]">
           <h2 className="font-display text-xl font-semibold lg:pt-2.5">Autonomy</h2>
@@ -117,10 +139,10 @@ export function Settings() {
           <Row label="Check frequency">Every {c.autonomy.poll_seconds} seconds, in Auto and Supervised modes</Row>
           <Row label="Retry after an error">After {Math.round(c.autonomy.retry_cooldown_seconds / 60)} minutes, or by hand</Row>
           <Row label="Pauses for your approval">{c.autonomy.checkpoints.length ? c.autonomy.checkpoints.map((k) => (k === "after_agent" ? "after the agent, before verification" : "before the pull request")).join("; ") + " (not in Auto mode)" : "None"}</Row>
-          <Row label="Command permissions">{control && <div className="space-y-1"><PermissionPolicy current={control.permission_policy} />{control.overrides.includes("permission_policy") && <ResetToConfig name="permission_policy" />}</div>}</Row>
-          <Row label="Quiet hours">{control && <div className="flex flex-wrap items-center gap-2"><QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />{control.overrides.includes("quiet_hours") && <ResetToConfig name="quiet_hours" />}</div>}</Row>
+          <Row label="Command permissions">{control && <PermissionPolicy current={control.permission_policy} />}</Row>
+          <Row label="Quiet hours">{control && <QuietHours key={control.quiet_hours ?? ""} current={control.quiet_hours} />}</Row>
           <Row label="Notifications">{control && <Notifications server={control.notifications} canNotify={control.can_notify} />}</Row>
-          <Row label="Daily cap"><div className="flex flex-wrap items-center gap-2"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} />{control?.overrides.includes("daily_budget_usd") && <ResetToConfig name="daily_budget_usd" />}</div></Row>
+          <Row label="Daily cap"><DailyCap key={c.daily_cap_effective} current={c.daily_cap_effective} /></Row>
           </dl>
         </section>
 

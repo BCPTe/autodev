@@ -28,19 +28,13 @@ export function Repo() {
 
       <div className="mb-8 flex flex-wrap items-center gap-2">
         {r.on_agent_branch && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked || !r.clean} title={locked ?? (r.clean ? undefined : "Commit or stash your changes first")} onClick={() => switchTo(r.base_branch, `Back on ${r.base_branch}`)}>
-            <Undo2 /> Back to {r.base_branch}
-          </Button>
+          <Button size="sm" variant="outline" disabled={pending || !!locked || !r.clean} title={locked ?? (r.clean ? undefined : "Commit or stash your changes first")} onClick={() => switchTo(r.base_branch, `Back on ${r.base_branch}`)} leftIcon={<Undo2 />}>Back to {r.base_branch}</Button>
         )}
         {config?.has_checks && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Runs the project's checks (tests, typecheck) on the code as it is now"} onClick={() => act(() => post("/api/repo/checks", {}), "Checks started. Follow them in Activity")}>
-            <FlaskConical /> Run checks
-          </Button>
+          <Button size="sm" variant="outline" disabled={pending || !!locked} title={locked ?? "Runs the project's checks (tests, typecheck) on the code as it is now"} onClick={() => act(() => post("/api/repo/checks", {}), "Checks started. Follow them in Activity")} leftIcon={<FlaskConical />}>Run checks</Button>
         )}
         {removable.length > 0 && (
-          <Button size="sm" variant="outline" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", {}), `${removable.length} ${removable.length === 1 ? "branch" : "branches"} deleted`)}>
-            <Trash2 /> Delete {removable.length} merged {removable.length === 1 ? "branch" : "branches"}
-          </Button>
+          <Button size="sm" variant="outline" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", {}), `${removable.length} ${removable.length === 1 ? "branch" : "branches"} deleted`)} leftIcon={<Trash2 />}>Delete {removable.length} merged {removable.length === 1 ? "branch" : "branches"}</Button>
         )}
         {locked && <span className="text-[13px] text-muted-foreground">{locked}</span>}
       </div>

@@ -68,7 +68,7 @@ function UnderstandingCard({ ticket, u, onCorrect }: { ticket: Ticket; u: Unders
   // open while the requester still has to confirm it, folded away once the work has moved on
   const [expanded, setExpanded] = useState(open || u.questions.length > 0)
   return (
-    <section aria-labelledby="understood" className="rounded-lg border bg-card p-4">
+    <section aria-labelledby="understood" className="rounded-lg border bg-card/60 backdrop-blur-sm p-4">
       <h2 id="understood">
         <button className="flex w-full items-baseline gap-3 text-left" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           <ChevronRight className={cn("size-4 shrink-0 self-center transition-transform", expanded && "rotate-90")} aria-hidden />

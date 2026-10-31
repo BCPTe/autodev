@@ -79,14 +79,14 @@ function ProposalCard({ p }: { p: Proposal }) {
       <div className="mt-3 flex flex-wrap gap-2">
         {editing ? (
           <>
-            <Button size="sm" disabled={pending || !text.trim()} onClick={saveEdit}><Check /> Save and accept</Button>
+            <Button size="sm" disabled={pending || !text.trim()} onClick={saveEdit} leftIcon={<Check />}>Save and accept</Button>
             <Button size="sm" variant="ghost" disabled={pending} onClick={() => setEditing(false)}>Cancel</Button>
           </>
         ) : (
           <>
-            <Button size="sm" disabled={pending} onClick={() => accept()}><Check /> Accept</Button>
-            <Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(true)}><Pencil /> Edit and accept</Button>
-            <Button size="sm" variant="ghost" disabled={pending} onClick={() => act(() => post(`/api/learnings/${p.id}/reject`, {}), "Proposal rejected")}><X /> Reject</Button>
+            <Button size="sm" disabled={pending} onClick={() => accept()} leftIcon={<Check />}>Accept</Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(true)} leftIcon={<Pencil />}>Edit and accept</Button>
+            <Button size="sm" variant="ghost" disabled={pending} onClick={() => act(() => post(`/api/learnings/${p.id}/reject`, {}), "Proposal rejected")} leftIcon={<X />}>Reject</Button>
           </>
         )}
       </div>

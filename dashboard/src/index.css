@@ -113,6 +113,16 @@
   }
   button { @apply cursor-pointer; }
   h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0.005em; text-wrap: balance; }
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent) transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 25%, transparent);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--foreground) 45%, transparent); }
   ::selection { background: color-mix(in oklab, var(--primary) 28%, transparent); }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 }
@@ -122,6 +132,7 @@
   display: flex; align-items: center; gap: 0.625rem;
   font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; line-height: 1.2;
   margin-bottom: 0.875rem;
+  user-select: none;
 }
 .section-title::before {
   content: ""; width: 0.5rem; height: 0.5rem; border-radius: 9999px; flex: none;
@@ -132,13 +143,6 @@
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .page-in { animation: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .page-in { animation: none; } }
-
-@keyframes lamp-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--lamp-violet) 55%, transparent); }
-  50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--lamp-violet) 0%, transparent); }
-}
-.lamp-live { animation: lamp-pulse 1.8s ease-out infinite; }
-@media (prefers-reduced-motion: reduce) { .lamp-live { animation: none; } }
 
 /* Ticket rows: white 20% with a light blur, greyer on hover. Applied to the cells because backdrop-filter is unreliable on <tr>. */
 tr.ticket-row > td { background-color: rgb(255 255 255 / 0.2); backdrop-filter: blur(4px); transition: background-color 0.15s; }

@@ -4,7 +4,8 @@ import { Activity, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard,
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu,DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ModeSwitch, MyTurn, Notice, StopAll } from "@/components/ControlBar";
 import { Lamp } from "@/components/Lamp";
 import { useOverview, useProjects } from "@/hooks/queries";
@@ -161,23 +162,27 @@ function ProjectSwitch() {
   if (!data || data.projects.length < 2) return null;
   const current = getProject();
   return (
-    <label className="mx-4 mb-2 block text-xs text-muted-foreground">
-      Project
-      <select
-        className="mt-1 block h-8 w-full rounded-md border bg-background px-2 text-sm text-foreground"
+    <div className="mx-3 mb-3 mt-2">
+      <p className="px-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Project</p>
+      <Select
         value={current ?? data.default}
-        onChange={(e) => {
-          setProject(e.target.value);
+        onValueChange={(v) => {
+          setProject(v);
           window.location.assign("/");
         }}>
-        {data.projects.map((p) => (
-          <option key={p.name} value={p.name}>
-            {p.name}
-            {p.waiting ? ` · ${p.waiting} waiting` : p.running ? " · working" : ""}
-          </option>
-        ))}
-      </select>
-    </label>
+        <SelectTrigger aria-label="Project">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent side="top">
+          {data.projects.map((p) => (
+            <SelectItem key={p.name} value={p.name}>
+              {p.name}
+              {p.waiting ? ` · ${p.waiting} waiting` : p.running ? " · working" : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -204,13 +209,12 @@ function HeaderIcons({ className }: { className?: string }) {
 
 function Sidebar() {
   return (
-    <>
+    <div className="flex min-h-full flex-1 flex-col">
       <div className="flex items-center gap-4 px-4 py-4">
         <img src={logo} alt="" className="size-12" />
         <span className="font-mono text-2xl font-semibold">AutoDev</span>
       </div>
-      <ProjectSwitch />
-      <nav className="flex flex-col gap-1 px-2 pb-2" aria-label="Sections">
+      <nav className="flex flex-1 flex-col gap-1 px-2 pb-2" aria-label="Sections">
         {NAV.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}
@@ -219,7 +223,8 @@ function Sidebar() {
           <NavItem key={item.to} {...item} small />
         ))}
       </nav>
-    </>
+      <ProjectSwitch />
+    </div>
   );
 }
 
@@ -237,7 +242,7 @@ export function Shell() {
     <div
       className="flex h-dvh flex-col overflow-hidden bg-cover bg-center lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]"
       style={{ backgroundImage: `url(${dark ? bgDark : bg})` }}>
-      <aside className="hidden rounded-xl border bg-card/30 shadow-md backdrop-blur-xs select-none lg:m-3 lg:block lg:overflow-y-auto">
+      <aside className="hidden rounded-xl border bg-card/30 shadow-md backdrop-blur-xs select-none lg:m-3 lg:flex lg:flex-col lg:overflow-y-auto">
         <Sidebar />
       </aside>
       <Sheet open={drawer} onOpenChange={setDrawer}>

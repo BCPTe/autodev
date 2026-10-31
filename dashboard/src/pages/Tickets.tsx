@@ -58,7 +58,7 @@ function FilterRow<T extends string>({ label, options, selected, onChange }: { l
 const tint = (s: TicketState, pct: number) => `color-mix(in oklab, var(--lamp-${STATES[s].lamp}) ${pct}%, transparent)`
 
 export function Tickets() {
-  const { data, isLoading } = useTickets()
+  const { data, isLoading, error } = useTickets()
   const [q, setQ] = useState("")
   const [states, setStates] = useState<Set<TicketState>>(new Set())
   const [risks, setRisks] = useState<Set<string>>(new Set())
@@ -134,6 +134,12 @@ export function Tickets() {
       </div>
 
       {isLoading && <Skeleton className="h-64 w-full" />}
+      {error && (
+        <div role="alert" className="rounded-xl border border-lamp-red/40 bg-lamp-red/10 p-4 text-sm">
+          <p className="font-medium">Could not load the tickets for this project</p>
+          <p className="mt-1 break-words text-muted-foreground">{error.message}</p>
+        </div>
+      )}
       {data && rows.length === 0 && <p className="py-6 text-muted-foreground">{data.tickets.length === 0 ? "No tickets yet." : "No ticket matches your search or filter."}</p>}
       {rows.length > 0 && (
         <div className="overflow-x-auto rounded-sm border">

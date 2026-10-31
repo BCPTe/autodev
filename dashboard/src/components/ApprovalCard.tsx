@@ -59,10 +59,10 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
       )}
       <div className="flex flex-wrap gap-2">
         {checkpoint ? (
-          <Button size="sm" disabled={pending} onClick={() => decide("allow", "Approved")}><Check /> Approve</Button>
+          <Button size="sm" disabled={pending} onClick={() => decide("allow", "Approved")} leftIcon={<Check />}>Approve</Button>
         ) : (
           <>
-            <Button size="sm" disabled={pending} onClick={() => decide("allow", "Allowed")}><Check /> Allow</Button>
+            <Button size="sm" disabled={pending} onClick={() => decide("allow", "Allowed")} leftIcon={<Check />}>Allow</Button>
             <Button size="sm" variant="outline" disabled={pending} title="Allows this program (python3, sed, grep...) for the rest of this run, except destructive uses" onClick={() => decide("allow_run", "Allowed for this run")}>Allow this program for this run</Button>
             <Button
               size="sm"
@@ -76,9 +76,9 @@ export function ApprovalCard({ a, showRun = true }: { a: Approval; showRun?: boo
           </>
         )}
         {denying ? (
-          <Button size="sm" color="red" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rejected" : "Denied")}><X /> {checkpoint ? "Confirm rejection" : "Confirm denial"}</Button>
+          <Button size="sm" color="red" disabled={pending} onClick={() => decide("deny", checkpoint ? "Rejected" : "Denied")} leftIcon={<X />}>{checkpoint ? "Confirm rejection" : "Confirm denial"}</Button>
         ) : (
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setDenying(true)}><X /> {checkpoint ? "Reject" : "Deny"}</Button>
+          <Button size="sm" variant="ghost" disabled={pending} onClick={() => setDenying(true)} leftIcon={<X />}>{checkpoint ? "Reject" : "Deny"}</Button>
         )}
       </div>
     </article>

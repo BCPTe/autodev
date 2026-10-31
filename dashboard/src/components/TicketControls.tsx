@@ -2,6 +2,7 @@ import { useState } from "react"
 import { GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck, X } from "lucide-react"
 import { MergeBranchButton } from "@/components/NeedsYouCards"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
 import { patch, post, type Ticket, type TicketState } from "@/lib/api"
@@ -21,7 +22,7 @@ function blockedReason(c: { mode: string; my_turn: boolean; busy: boolean } | un
 export function CloseTicket({ ticket: t }: { ticket: Ticket }) {
   const { act, pending } = useAct()
   const setStatus = (status: TicketState, done: string) => act(() => patch(`/api/tickets/${t.id}`, { status }), done)
-  if (t.status === "closed") return <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("new", "Reopened")}><RotateCcw /> Reopen</Button>
+  if (t.status === "closed") return <Button size="sm" variant="outline" disabled={pending} onClick={() => setStatus("new", "Reopened")} leftIcon={<RotateCcw />}>Reopen</Button>
   return (
     <Button
       size="sm"
@@ -29,8 +30,9 @@ export function CloseTicket({ ticket: t }: { ticket: Ticket }) {
       color="red"
       disabled={pending}
       onClick={() => setStatus("closed", "Closed")}
+      leftIcon={<X />}
     >
-      <X /> Close ticket
+      Close ticket
     </Button>
   )
 }
@@ -50,16 +52,14 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
   }
 
   const startBtn = (kind: "triage" | "fix", label: string, variant: "default" | "secondary" = "secondary") => (
-    <Button size="sm" variant={variant} disabled={pending || !!blocked} title={blocked ?? undefined} onClick={() => start(kind, kind === "fix" ? "Fix started" : "Triage started")}>
-      <Play /> {label}
-    </Button>
+    <Button size="sm" variant={variant} disabled={pending || !!blocked} title={blocked ?? undefined} onClick={() => start(kind, kind === "fix" ? "Fix started" : "Triage started")} leftIcon={<Play />}>{label}</Button>
   )
 
   // after a verified fix whose pull request could not be opened, publishing is the move; retrying the agent is the fallback
   const canOpenPr = state === "escalated" && !!config?.pr_enabled && !t.pr_url && !!t.branch && t.verification === "Passed"
 
   return (
-    <section aria-label="Actions" className="space-y-3 rounded-sm border bg-muted/40 p-3">
+    <section aria-label="Actions" className="space-y-3 pt-3">
       <div className="flex flex-wrap items-center gap-2">
         {state === "new" && startBtn("triage", "Analyse now", "default")}
         {state === "needs_info" && (
@@ -70,7 +70,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         )}
         {state === "analyzed" && (
           <>
-            <Button size="sm" disabled={pending || !!blocked} title={blocked ?? undefined} onClick={approveAndStart}><ShieldCheck /> Approve and start</Button>
+            <Button size="sm" disabled={pending || !!blocked} title={blocked ?? undefined} onClick={approveAndStart} leftIcon={<ShieldCheck />}>Approve and start</Button>
             <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Approved")}>Approve only</Button>
             {startBtn("triage", "Analyse again")}
           </>
@@ -79,7 +79,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         {state === "review" && (
           <>
           <MergeBranchButton ticket={t} />
-          <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Moved back to In progress")}><RotateCcw /> Move back to In progress</Button>
+          <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Moved back to In progress")} leftIcon={<RotateCcw />}>Move back to In progress</Button>
           </>
         )}
         {/* only after a verified fix whose pull request could not be opened (see pipeline._fix_in_workspace) */}
@@ -89,12 +89,13 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
             disabled={pending || !!blocked}
             title={blocked ?? "Opens the pull request for the work already done on the branch (re-runs the checks, no agent)"}
             onClick={() => start("publish", "Opening the pull request")}
+            leftIcon={<GitPullRequest />}
           >
-            <GitPullRequest /> Open PR
+            Open PR
           </Button>
         )}
         {state === "escalated" && (
-          <Button size="sm" variant={canOpenPr ? "secondary" : "default"} disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })}><RotateCcw /> Retry (reset attempts)</Button>
+          <Button size="sm" variant={canOpenPr ? "secondary" : "default"} disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })} leftIcon={<RotateCcw />}>Retry (reset attempts)</Button>
         )}
         {blocked && (state === "new" || state === "in_progress") && <span className="text-xs text-muted-foreground">{blocked}</span>}
       </div>
@@ -122,9 +123,14 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
           </select>
         </label>
         {t.attempts > 0 && (
-          <Button size="sm" color="red" disabled={pending} onClick={() => act(() => patch(`/api/tickets/${t.id}`, { attempts: 0 }), "Attempts reset")}>
-            Reset attempts ({t.attempts})
-          </Button>
+          <ConfirmDialog
+            trigger={<Button size="sm" color="red" disabled={pending}>Reset attempts ({t.attempts})</Button>}
+            title="Reset attempts?"
+            description={`This sets the ${t.attempts} recorded attempt(s) on this ticket back to 0.`}
+            confirmLabel="Reset attempts"
+            color="red"
+            onConfirm={() => act(() => patch(`/api/tickets/${t.id}`, { attempts: 0 }), "Attempts reset")}
+          />
         )}
         {(state === "closed" || state === "review") && (
           <Button
@@ -134,8 +140,9 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
             disabled={pending || !!blocked}
             title={blocked ?? "A cheap read-only agent reads how this ticket went and proposes playbook entries for you to review"}
             onClick={() => start("learn", "Retrospective started: proposals will appear in Learnings")}
+            leftIcon={<Lightbulb />}
           >
-            <Lightbulb /> Learn from this ticket
+            Learn from this ticket
           </Button>
         )}
       </div>

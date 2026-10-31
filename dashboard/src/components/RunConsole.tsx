@@ -38,11 +38,11 @@ export function RunConsole({ runId, interactive }: { runId: number; interactive:
           className="w-full resize-y rounded-md border bg-background px-3 py-2 text-[13.5px]"
         />
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" size="sm" loading={pending} disabled={!text.trim()}><Send /> Send</Button>
+          <Button type="submit" size="sm" loading={pending} disabled={!text.trim()} leftIcon={<Send />}>Send</Button>
           {waiting ? (
             <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => send("Please continue where you left off.")}>Resume</Button>
           ) : (
-            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => act(() => post(`/api/runs/${runId}/pause`, {}), "Agent paused")}><Pause /> Pause</Button>
+            <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => act(() => post(`/api/runs/${runId}/pause`, {}), "Agent paused")} leftIcon={<Pause />}>Pause</Button>
           )}
         </div>
       </form>

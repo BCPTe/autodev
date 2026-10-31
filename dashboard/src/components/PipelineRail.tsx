@@ -32,9 +32,9 @@ export function PipelineRail({ tickets }: { tickets: Ticket[] }) {
   const by = (s: TicketState) => tickets.filter((t) => t.status === s)
 
   return (
-    <section aria-label="Ticket pipeline" className="flex min-h-[40vh] flex-col justify-center">
+    <section aria-label="Ticket pipeline" className="flex min-h-[40vh] flex-col justify-center select-none">
       <div className="relative grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-5">
-        <div aria-hidden className="absolute left-[10%] right-[10%] top-[9px] hidden h-px bg-rail lg:block" />
+        <div aria-hidden className="absolute left-[10%] right-[10%] top-2.25 hidden h-px bg-rail lg:block" />
         {TRACK.map((state) => {
           const list = by(state)
           const meta = STATES[state]

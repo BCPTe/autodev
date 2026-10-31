@@ -65,8 +65,9 @@ export function MyTurn() {
       className="has-[>svg]:px-4"
       title={on ? "You are working in the checkout: agents wait. Press to hand it back" : "Take the checkout: no agent starts until you hand it back"}
       onClick={() => act(() => put("/api/control", { my_turn: !on }), on ? "Checkout handed back to the agents" : "The checkout is yours")}
+      leftIcon={<Hand />}
     >
-      <Hand /> {on ? "Checkout is yours" : "Take checkout"}
+      {on ? "Checkout is yours" : "Take checkout"}
     </Button>
   )
 }
@@ -89,8 +90,9 @@ export function StopAll() {
       radius="full"
       disabled={pending}
       onClick={() => (armed ? (setArmed(false), act(() => post("/api/control/stop-all", {}), "Agents stopped")) : setArmed(true))}
+      leftIcon={<OctagonX />}
     >
-      <OctagonX /> {armed ? "Confirm: stop all" : "Stop all"}
+      {armed ? "Confirm: stop all" : "Stop all"}
     </Button>
   )
 }
@@ -107,7 +109,7 @@ export function Notice() {
   ].filter(Boolean) as string[]
   if (!lines.length) return null
   return (
-    <div role="status" className="mx-3 mt-3 flex shrink-0 items-center gap-3 rounded-xl border border-lamp-amber/40 bg-lamp-amber/15 px-4 py-2 text-sm inset-shadow-sm backdrop-blur-xl lg:ml-0 sm:px-6">
+    <div role="status" className="mx-3 mt-3 flex shrink-0 items-center gap-3 rounded-xl border border-lamp-amber/40 bg-lamp-amber/15 px-4 py-2 text-sm inset-shadow-sm backdrop-blur-xl lg:ml-0 sm:px-6 select-none">
       <Lock className="size-4 shrink-0 text-amber-700" aria-hidden />
       <div>{lines.map((l) => <p key={l}>{l}</p>)}</div>
     </div>

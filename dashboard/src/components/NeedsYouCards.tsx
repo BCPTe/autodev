@@ -12,7 +12,8 @@ import { useConfig, useOverview, usePrs, useTicket } from "@/hooks/queries";
 import { mergeBlocker } from "@/pages/Prs";
 import { patch, post, type DashboardItem, type Pr } from "@/lib/api";
 import { ago } from "@/lib/format";
-import { STATES } from "@/lib/status";
+import { STATES, type Lamp as LampKind } from "@/lib/status";
+import type { ColorName } from "@/components/ui/colors";
 import { latestUnderstanding } from "@/lib/understanding";
 
 type Item = DashboardItem
@@ -20,13 +21,13 @@ type Item = DashboardItem
 /** Navigation and secondary links: quiet until hovered, so the one real action in the card stands out. */
 const QUIET = "text-muted-foreground hover:text-foreground";
 
-const STATE_TEXT: Record<string, string> = {
-  green: "text-lamp-green",
-  blue: "text-lamp-blue",
-  amber: "text-lamp-amber",
-  red: "text-lamp-red",
-  violet: "text-lamp-violet",
-  idle: "text-muted-foreground",
+const STATE_COLOR: Record<LampKind, ColorName> = {
+  green: "green",
+  blue: "blue",
+  amber: "amber",
+  red: "red",
+  violet: "violet",
+  idle: "slate",
 };
 
 function CardShell({ item, children, actions }: { item: Item; children?: React.ReactNode; actions: React.ReactNode }) {
@@ -35,17 +36,17 @@ function CardShell({ item, children, actions }: { item: Item; children?: React.R
     <article className="flex flex-col gap-4 rounded-xl border bg-card/80 hover:bg-card p-4 sm:flex-row sm:items-stretch sm:justify-between">
       <div className="min-w-0 flex-1 flex flex-col gap-3 justify-between">
         <header className="space-y-1.5">
-          <span className={`inline-flex items-center gap-1.5 text-[13px] font-medium ${STATE_TEXT[STATES[state].lamp]}`}>
+          <Badge variant="outline" color={STATE_COLOR[STATES[state].lamp]}>
             <Lamp kind={STATES[state].lamp} className="size-2" />
             {STATES[state].label}
-          </span>
+          </Badge>
           <Link to={`/tickets/${ticket.id}`} className="block truncate text-base font-medium underline-offset-4 hover:underline">
             {ticket.title}
           </Link>
         </header>
         {children && <div className="text-[13px]">{children}</div>}
       </div>
-      <div className="flex shrink-0 flex-col gap-8 sm:items-end sm:justify-between">
+      <div className="flex shrink-0 flex-col gap-8 sm:items-end sm:justify-between select-none">
         <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] sm:justify-end">
           {ticket.area && (
             <div className="flex items-center gap-1.5">
@@ -117,9 +118,7 @@ export function MergeBranchButton({ ticket }: { ticket: Pick<Item["ticket"], "id
   };
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Button size="sm" disabled={pending || high} title={high ? "High risk: read it and merge by hand" : `Review the changes, then fast-forward ${config.base_branch} to ${ticket.branch}`} onClick={() => setOpen(true)}>
-        <GitMerge /> Merge branch
-      </Button>
+      <Button size="sm" disabled={pending || high} title={high ? "High risk: read it and merge by hand" : `Review the changes, then fast-forward ${config.base_branch} to ${ticket.branch}`} onClick={() => setOpen(true)} leftIcon={<GitMerge />}>Merge branch</Button>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(64rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border bg-background shadow-xl">
@@ -135,7 +134,7 @@ export function MergeBranchButton({ ticket }: { ticket: Pick<Item["ticket"], "id
           <div className="min-h-0 flex-1 overflow-y-auto p-4"><DiffView branch={ticket.branch} /></div>
           <footer className="flex justify-end gap-2 border-t p-4">
             <Dialog.Close asChild><Button variant="outline" disabled={pending}>Cancel</Button></Dialog.Close>
-            <Button loading={pending} onClick={merge}><GitMerge /> Merge into {config.base_branch}</Button>
+            <Button loading={pending} onClick={merge} leftIcon={<GitMerge />}>Merge into {config.base_branch}</Button>
           </footer>
         </Dialog.Content>
       </Dialog.Portal>
@@ -187,9 +186,7 @@ function ReviewCard({ item }: { item: Item }) {
             </Button>
           )}
           {pr && (
-            <Button size="sm" disabled={pending || !!blocker} title={blocker ?? undefined} onClick={merge}>
-              <GitMerge /> {armed ? "Confirm: squash and merge" : "Merge"}
-            </Button>
+            <Button size="sm" disabled={pending || !!blocker} title={blocker ?? undefined} onClick={merge} leftIcon={<GitMerge />}>{armed ? "Confirm: squash and merge" : "Merge"}</Button>
           )}
           {noPr && <MergeBranchButton ticket={ticket} />}
         </>
@@ -238,9 +235,7 @@ function AnalyzedCard({ item }: { item: Item }) {
           <Button size="sm" variant="secondary" disabled={pending} title="Approve without starting the fix yet" onClick={() => act(() => patch(`/api/tickets/${ticket.id}`, { status: "in_progress" }), "Approved")}>
             Approve only
           </Button>
-          <Button size="sm" disabled={pending || !!blocked} title={blocked ?? undefined} onClick={approveAndStart}>
-            <ShieldCheck /> Approve and start
-          </Button>
+          <Button size="sm" disabled={pending || !!blocked} title={blocked ?? undefined} onClick={approveAndStart} leftIcon={<ShieldCheck />}>Approve and start</Button>
         </>
       }>
       {u ? (
