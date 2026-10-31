@@ -10,7 +10,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "claude-agent-sdk>=0.2.170",
     "fastapi>=0.158.2",
-    "uvicorn>=0.30",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
