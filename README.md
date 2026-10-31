@@ -4,6 +4,12 @@ Orchestrator that turns tracker tickets (Notion) into verified pull requests usi
 
 Start from `projects/example.yaml.dist`; `projects/sandbox.yaml.dist` is a toy project for cheap trials.
 
+## Requirements
+
+Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 20+ (dashboard), `git`, a Notion integration, optionally a GitHub token, and access to Claude through the Claude Agent SDK.
+
+> **Warning:** agents run code, tests and `git` on your checkout and can push branches and open PRs with your tokens. Start with `projects/sandbox.yaml.dist`, keep the mode on Manual until you trust it, and never expose the dashboard beyond localhost.
+
 ## Setup
 
 1. `cp .env.example .env` and fill in `NOTION_TOKEN` (an internal integration shared with the ticket database) and, for pull requests, `GITHUB_TOKEN`.
@@ -51,7 +57,7 @@ Start from `projects/example.yaml.dist`; `projects/sandbox.yaml.dist` is a toy p
 
 Runs started from the dashboard are interactive (runs started with `autodev triage|fix` in a terminal are not):
 - **Message:** writing to a running agent interrupts what it is doing and gives it your text as the next turn, keeping its whole context. **Pause** interrupts and waits for your next message.
-- **Permissions:** `autonomy.permission_policy` (also in Settings) is `ask` (every command outside `allowed_bash` waits for you) or `trusted` (ordinary commands run; destructive ones such as `rm -rf`, `git push`, `sudo`, `.env`/`~/.ssh` access and writes outside the project always wait, and are refused in Auto mode). Switching between Manual and Supervised does not change this. A waiting request shows up under "Needs your attention": allow once, allow this program for the run (never a destructive use), stop asking for ordinary commands, or deny with a reason the agent reads.
+- **Permissions:** `autonomy.permission_policy` (also in Settings, where **Reset to project file** brings back the values of the YAML; see [docs/CONFIG.md](docs/CONFIG.md)) is `ask` (every command outside `allowed_bash` waits for you) or `trusted` (ordinary commands run; destructive ones such as `rm -rf`, `git push`, `sudo`, `.env`/`~/.ssh` access and writes outside the project always wait, and are refused in Auto mode). Switching between Manual and Supervised does not change this. A waiting request shows up under "Needs your attention": allow once, allow this program for the run (never a destructive use), stop asking for ordinary commands, or deny with a reason the agent reads.
 - **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
 - Finished runs cannot be resumed with a chat yet.
 
@@ -64,7 +70,7 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 ### Repo and pull requests
 
 - **Repo:** the checkout's state, the agent branches with a file-by-file diff, "Try" (switch to a branch to test it with Docker), "Back to <base>", and **Run the checks** (the project's `checks` as a tracked run). Switching branches and deleting are refused while an agent works or when the tree is dirty.
-- **Pull request:** autodev's PRs with GitHub check status, the ticket's risk and verification, and the PR description with the evidence. **Merge** (squash) needs a second click and is refused for drafts, failing or pending checks, conflicts and Alto risk; a merge closes the ticket and deletes the remote branch.
+- **Pull request:** autodev's PRs with GitHub check status, the ticket's risk and verification, and the PR description with the evidence. **Merge** (squash) needs a second click and is refused for drafts, failing or pending checks, conflicts and High risk; a merge closes the ticket and deletes the remote branch.
 - Branches whose PR was merged (even squashed) count as merged. `uv run autodev cleanup [--dry-run] [--remote] [--workspaces]` deletes them from the terminal; unmerged branches are never removed.
 
 ### Running unattended
@@ -84,16 +90,17 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 
 ```
 src/autodev/   orchestrator (trackers, agents, sandbox, pipeline, github, knowledge playbook, report)
-e2e/           black-box Playwright suites, one folder per project
-projects/      per-project configuration
+e2e/           demo server with fake data for UI work and screenshots
+dashboard/     React + Vite web UI, built to static files served by `autodev serve`
+tests/         pytest suite (fixtures in tests/fixtures)
+projects/      per-project configuration (your own files are git-ignored)
 docs/          design notes, Notion schema
 ```
 
 ## Roadmap
 
-1. Notion integration + triage agent (read-only on code, comments on the ticket)
-2. Fix agent in an isolated git worktree, opens PR against the base branch
-3. Playwright verification on local/staging, review agent
-4. Auto-merge for low-risk classes
+Done: Notion integration and triage agent, fix agent in an isolated worktree that opens the PR, verification gate, dashboard with autonomy modes, playbook and evals.
+
+Next: Playwright verification on local/staging, a review agent, auto-merge for low-risk classes, other trackers than Notion. See [docs/BACKLOG.md](docs/BACKLOG.md).
 
 See [docs/NOTION_SCHEMA.md](docs/NOTION_SCHEMA.md) for the ticket database and state machine.

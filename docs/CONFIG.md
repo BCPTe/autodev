@@ -32,7 +32,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | Key | Meaning and where to find it |
 |---|---|
 | `tracker.type` | `notion` (the only one today). |
-| `tracker.database_id` | The 32 hex characters in the database URL: `notion.so/<workspace>/`**`00000000000000000000000000000000`**`?v=...`. Open the database as a full page first (not an inline view). |
+| `tracker.database_id` | The 32 hex characters in the database URL: `notion.so/<workspace>/`**`00bf5c56a4bf41da8c98d4e860b63c76`**`?v=...`. Open the database as a full page first (not an inline view). |
 | `tracker.data_source_id` | Notion API 2025-09 splits a database into data sources. Get it with `curl -s https://api.notion.com/v1/databases/<database_id> -H "Authorization: Bearer $NOTION_TOKEN" -H "Notion-Version: 2025-09-03"` and read `data_sources[0].id`. |
 | `tracker.status_map` | Maps each autodev state (`new`, `needs_info`, `analyzed`, `in_progress`, `review`, `escalated`, `closed`) to the exact text of the options of the Notion **Status** column. Rename the options in Notion or the labels here, but they must match character for character. |
 | `tracker.properties` | Optional. Notion column name for each field the code reads or writes. Defaults (English): `title: Title`, `status: Status`, `kind: Type`, `area: Area`, `priority: Priority`, `environment: Environment`, `page_url: Page URL`, `reported_by: Reported by`, `authorized: Authorized`, `attempts: Attempts`, `cost: Cost (USD)`, `model: Model`, `risk: Risk`, `branch: Branch`, `pr: PR`, `agent_note: Agent notes`, `verification: Verification result`, `attachments: Attachments`. Only list the ones you named differently. The README has the column types. |
@@ -68,7 +68,7 @@ To check what you wrote: `uv run autodev check` (Notion reachable? columns prese
 | `limits.max_fix_runs` | How many times a ticket may be started before it escalates; reset with "Azzera tentativi". |
 | `limits.max_files` | A fix touching more files than this is escalated as suspicious. |
 | `limits.budget_usd_per_ticket` | Total spend allowed on one ticket across triage and fixes. |
-| `limits.daily_budget_usd` | Default daily cap per project (editable in the dashboard). Values are dollar equivalents; with a subscription you do not pay them but they use your quota. |
+| `limits.daily_budget_usd` | Default daily cap per project (editable in the dashboard). Values are dollar equivalents; with a subscription you do not pay them but they use your quota. Changing it in the dashboard stores an override (see below). |
 | `model_choices` | Names selectable in the Notion **Model** column → model id. The names must be exactly the options of that column (plus `Auto`, which uses `agents.fix.models`). |
 
 ### `autonomy` (how independent it is)
@@ -101,3 +101,9 @@ The file has one `## where`, `## domain`, `## gotcha` and `## command` section, 
 
 ### Present in the file but not used by the code
 `commands` and `environments` (in the project YAML) are notes for humans today; no part of autodev reads them. You can omit them.
+
+## Dashboard overrides and reset
+
+Three values can be changed from the dashboard's Settings page: `limits.daily_budget_usd`, `autonomy.quiet_hours` and `autonomy.permission_policy`. An edit is saved in the database per project and wins over the project file; editing the YAML later does not change a value that was overridden.
+
+While at least one override exists, Settings shows **Reset to project file**. After confirmation it deletes all the overrides of that project, so the values from the YAML apply again (the change is recorded in the audit log as `reset_setting`). The API is `PUT /api/control` with `{"reset": ["quiet_hours", ...]}`; `GET /api/control` lists the active overrides in `overrides`.
