@@ -104,3 +104,7 @@ Done: Notion integration and triage agent, fix agent in an isolated worktree tha
 Next: Playwright verification on local/staging, a review agent, auto-merge for low-risk classes, other trackers than Notion. See [docs/BACKLOG.md](docs/BACKLOG.md).
 
 See [docs/NOTION_SCHEMA.md](docs/NOTION_SCHEMA.md) for the ticket database and state machine.
+
+## License
+
+[FSL-1.1-ALv2](LICENSE) (Functional Source License, converting to Apache 2.0). You can use, modify and self-host autodev for any purpose except offering it as a competing product or service; each version becomes Apache 2.0 two years after its release. This is source-available, not an OSI open source license.
