@@ -208,6 +208,21 @@ class Engine:
 
     def check_now(self) -> None:
         """The automatic loop looks at the board within a second."""
+    RESETTABLE = ("quiet_hours", "permission_policy", "daily_budget_usd")
+
+    def overrides(self) -> list[str]:
+        """Settings changed from the dashboard, which now win over the project file."""
+        return [n for n in self.RESETTABLE if self.db.get_setting(self._k(n)) is not None]
+
+    def reset_setting(self, name: str, actor: str = "user") -> None:
+        """Drop a dashboard override so the value from the project file applies again."""
+        if name not in self.RESETTABLE:
+            raise ValueError(f"cannot reset: {name}")
+        self.db.delete_setting(self._k(name))
+        self.db.audit(actor, "reset_setting", detail=name)
+        if name == "daily_budget_usd":
+            self.notice = None
+
         self._next_check = self._clock()
 
     def busy(self) -> bool:
@@ -233,6 +248,7 @@ class Engine:
             "permission_policy": self.permission_policy,
             "can_notify": notify.resolve_command(self.cfg.autonomy.notify_command) is not None,
             "poll_seconds": poll,
+            "overrides": self.overrides(),
             "next_check": self._next_check if self.mode in ("auto", "supervised") else None,
         }
 

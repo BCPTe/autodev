@@ -89,6 +89,7 @@ export interface Control {
   notifications: boolean
   can_notify: boolean
   permission_policy: "ask" | "trusted"
+  overrides: string[]
 }
 
 export interface TicketAction {

@@ -95,7 +95,7 @@ def test_can_come_back_to_an_existing_branch_from_another_one(project):
 
 def test_gate_only_touches_the_files_of_the_run_and_leaves_ignored_files_alone(project):
     cfg, local = project
-    (local / ".gitignore").write_text("cache/\n")
+    (local / ".gitignore").write_text("cache/\n__pycache__/\n")
     git_out(local, "add", "-A")
     git_out(local, "commit", "-q", "-m", "ignore cache")
     git_out(local, "push", "-q", "origin", "main")

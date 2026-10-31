@@ -150,6 +150,9 @@ class Database:
             (key, value),
         )
 
+    def delete_setting(self, key: str) -> None:
+        self.execute("DELETE FROM settings WHERE key = ?", (key,))
+
 
 def dumps(data: dict | None) -> str | None:
     return json.dumps(data, ensure_ascii=False) if data else None

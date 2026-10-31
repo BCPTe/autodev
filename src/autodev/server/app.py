@@ -48,6 +48,7 @@ class Control(BaseModel):
     quiet_hours: str | None = None
     notifications: bool | None = None
     permission_policy: str | None = None
+    reset: list[str] | None = None
 
 
 class TicketEdit(BaseModel):
@@ -306,6 +307,8 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
     @r.put("/control", dependencies=[Depends(require_session)])
     def control_update(body: Control):
         try:
+            for name in body.reset or []:
+                engine.reset_setting(name)
             if body.mode is not None:
                 engine.set_mode(body.mode)
             if body.my_turn is not None:
