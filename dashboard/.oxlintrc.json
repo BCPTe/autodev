@@ -4,5 +4,17 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/components/ui/**",
+        "src/lib/theme.tsx",
+        "src/pages/Prs.tsx",
+        "src/components/ControlBar.tsx",
+        "src/components/TicketControls.tsx"
+      ],
+      "rules": { "react/only-export-components": "off" }
+    }
+  ]
 }

@@ -66,6 +66,8 @@ function NextStep({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
             <span className="block text-xs text-muted-foreground">In front of it: {KIND_LABEL[ahead.kind].toLowerCase()} on {ahead.ticket_id}</span>
             <span className="block truncate font-medium">{ahead.ticket_title || ahead.ticket_id}</span>
           </span>
+          {/* Elapsed time since a server timestamp: a one-off read at render is enough. */}
+          {/* oxlint-disable-next-line react/purity */}
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{duration(Date.now() / 1000 - ahead.started_at)}</span>
           <ArrowUpRight className="size-4 shrink-0 text-primary" aria-hidden />
         </Link>

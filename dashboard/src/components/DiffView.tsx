@@ -32,7 +32,7 @@ export function DiffView({ branch }: { branch: string | null }) {
   if (isLoading) return <Skeleton className="h-24 w-full" />
   if (error) return <p className="text-destructive">{(error as Error).message}</p>
   if (!data || data.files.length === 0) return <p className="text-muted-foreground">No differences.</p>
-  const toggle = (p: string) => setOpen((s) => { const n = new Set(s); n.has(p) ? n.delete(p) : n.add(p); return n })
+  const toggle = (p: string) => setOpen((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n })
   const add = data.files.reduce((n, f) => n + (f.additions ?? 0), 0)
   const del = data.files.reduce((n, f) => n + (f.deletions ?? 0), 0)
 
