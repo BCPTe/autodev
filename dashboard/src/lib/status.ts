@@ -1,4 +1,4 @@
-import type { Run, TicketState } from "@/lib/api"
+import type { Control, Run, TicketState } from "@/lib/api"
 
 export type Lamp = "idle" | "amber" | "green" | "red" | "violet" | "blue"
 
@@ -49,4 +49,24 @@ export function journeyStep(state: TicketState, hasRuns: { fix: boolean; pr: boo
     case "closed": return 5
     case "escalated": return hasRuns.pr ? 4 : hasRuns.fix ? 3 : 1
   }
+}
+
+export interface Phase {
+  key: "running" | "queued" | "stopped" | "retry" | "ready"
+  title: string
+  hint: string
+}
+
+/** What "In progress" really means right now: the state alone cannot tell a running agent from a ticket waiting its turn. */
+export function fixPhase(runs: Run[], c: Control | undefined): Phase {
+  if (runs.some((r) => r.status === "running")) return { key: "running", title: "Fixing", hint: "An agent is working on it now" }
+  if (c?.mode === "paused") return { key: "stopped", title: "On hold", hint: "The mode is Paused: switch it to Auto, Supervised or Manual so the fix can start" }
+  if (c?.my_turn) return { key: "stopped", title: "On hold", hint: "The checkout is yours: hand it back so the fix can start" }
+  if (c?.busy) return { key: "queued", title: "In the queue", hint: "Only one agent runs at a time: the fix starts when the current one finishes" }
+  if (c?.blocked) return { key: "stopped", title: "On hold", hint: `Blocked: ${c.blocked}` }
+  const last = runs.filter((r) => r.kind === "fix").sort((a, b) => b.started_at - a.started_at)[0]
+  if (last && (last.status === "failed" || last.status === "cancelled"))
+    return { key: "retry", title: "Last fix did not finish", hint: last.error ? `${RUN_LABEL[last.status]}: ${last.error}` : "Start it again or reset the attempts" }
+  const auto = c?.mode === "auto" || c?.mode === "supervised"
+  return { key: "ready", title: "Ready to fix", hint: auto ? "autodev starts it on its next check, or start it now" : "Start the fix when you are ready" }
 }

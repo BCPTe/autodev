@@ -1,12 +1,13 @@
 import { PageHeader } from "@/components/PageHeader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useConfig, useOverview } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
-import { put } from "@/lib/api"
+import { put, type Control, type Overview } from "@/lib/api"
 import { browserNotificationsOn, setBrowserNotifications } from "@/hooks/useAttention"
 import { MODES } from "@/components/ControlBar"
 import { money, shortModel } from "@/lib/format"
@@ -50,11 +51,17 @@ function ResetOverrides({ overrides, project }: { overrides: string[]; project: 
 
 function DailyCap({ current }: { current: number }) {
   const { act, pending } = useAct()
+  const qc = useQueryClient()
   const [value, setValue] = useState(String(current))
   const n = Number(value)
   const valid = Number.isFinite(n) && n > 0 && n <= 1000
   return (
-    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(() => put("/api/control", { daily_budget_usd: n }), "Daily cap saved") }}>
+    <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (valid) act(async () => {
+      const control = await put<Control>("/api/control", { daily_budget_usd: n })
+      // header reads the overview: show the new cap now instead of after the refetch
+      qc.setQueryData<Overview>(["overview"], (o) => (o ? { ...o, daily_cap: n, control } : o))
+      return control
+    }, "Daily cap saved") }}>
       <span aria-hidden>$</span>
       <Input aria-label="Daily cap in dollars" className="h-8 w-24" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
       <Button type="submit" size="sm" variant="outline" loading={pending} disabled={!valid || n === current}>Save</Button>

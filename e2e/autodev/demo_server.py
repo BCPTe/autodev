@@ -1,9 +1,13 @@
 """Dashboard backed by fake data, for browser tests and screenshots (no Notion, no agents).
 
-Run from the repo root:  uv run python e2e/autodev/demo_server.py <port> <db-path>
+Run from the repo root:  uv run python e2e/autodev/demo_server.py <port> <db-path> [--dev]
+With --dev <port> is the Vite dev server (hot reload) and the API runs on a free internal port behind it.
 A run is left in progress and keeps appending events for a while, to exercise the live view.
 """
 import asyncio
+import os
+import socket
+import subprocess
 import sys
 import threading
 from types import SimpleNamespace
@@ -152,8 +156,8 @@ def fake_agents() -> None:
         status = Status.REVIEW
         cost_usd = 0.4
         models = ["claude-sonnet-5-5"]
-        branch = "autodev/demo"
-        pr_url = None
+        branch = "autodev/wizard-perde-dati-a1b2c3"
+        pr_url = "https://github.com/o/r/pull/12"
         checks = []
         message = "demo"
 
@@ -174,6 +178,8 @@ def fake_agents() -> None:
         if not approved:
             await tracker.set_status(ticket.id, Status.ESCALATED)
             return Outcome()
+        # the real pipeline records the branch and the pull request on the ticket; the demo borrows the seeded ones
+        await tracker.update(ticket.id, branch="autodev/wizard-perde-dati-a1b2c3", pr_url="https://github.com/o/r/pull/12")
         await tracker.set_status(ticket.id, Status.REVIEW)
         return Outcome()
 
@@ -182,6 +188,7 @@ def fake_agents() -> None:
 
 def main() -> None:
     port, db_path = int(sys.argv[1]), sys.argv[2]
+    dev = "--dev" in sys.argv[3:]
     Path(db_path).unlink(missing_ok=True)
     db = Database(db_path)
     root = Path(tempfile.mkdtemp(prefix="autodev-demo-"))
@@ -222,7 +229,21 @@ def main() -> None:
 
     threading.Thread(target=lambda: asyncio.run(feed(db, live)), daemon=True).start()
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    vite = None
+    if dev:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            api_port = sock.getsockname()[1]
+        root = Path(__file__).resolve().parents[2] / "dashboard"
+        vite = subprocess.Popen(["npm", "run", "dev", "--", "--port", str(port), "--strictPort"], cwd=root, env={**os.environ, "AUTODEV_API": f"http://127.0.0.1:{api_port}"})
+        print(f"Hot reload: http://localhost:{port}", flush=True)
+    else:
+        api_port = port
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=api_port, log_level="warning")
+    finally:
+        if vite:
+            vite.terminate()
 
 
 if __name__ == "__main__":
