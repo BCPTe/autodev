@@ -207,3 +207,59 @@ def test_going_back_to_the_base_branch_brings_it_up_to_date(project, tmp_path):
     git(project.local_path, "checkout", "-q", "autodev/fix-a")
     repo.checkout(project, "main")
     assert "merge via PR" in git(project.local_path, "log", "-1", "--format=%s")
+
+
+# ---- pushing the base branch after a local merge --------------------------------------------
+def commit_on_main(cfg, name, body=""):
+    path = __import__("pathlib").Path(cfg.local_path) / f"{name}.txt"
+    path.write_text(name)
+    git(cfg.local_path, "add", path.name)
+    git(cfg.local_path, "commit", "-qm", f"{name}\n\n{body}".strip())
+    return git(cfg.local_path, "rev-parse", "HEAD")
+
+
+def remote_head(cfg):
+    git(cfg.local_path, "fetch", "-q")
+    return git(cfg.local_path, "rev-parse", "origin/main")
+
+
+def test_the_push_plan_lists_what_would_go_out_and_marks_the_commits_that_are_not_autodevs(project):
+    mine = commit_on_main(project, "mine")
+    tip = commit_on_main(project, "fix: Bug", "Ticket: https://notion.so/x")
+    plan = repo.push_plan(project, tip)
+    assert [(c["subject"], c["autodev"]) for c in plan["commits"]] == [("mine", False), ("fix: Bug", True)]
+    assert plan["own_count"] == 1 and plan["can_push"] and plan["target"] == tip
+    assert mine[:8] == plan["commits"][0]["sha"]
+
+
+def test_pushing_stops_at_the_autodev_commit_so_later_work_stays_local(project):
+    tip = commit_on_main(project, "fix: Bug", "Ticket: https://notion.so/x")
+    later = commit_on_main(project, "mine-after")
+    plan = repo.push_base(project, tip)
+    assert [c["subject"] for c in plan["commits"]] == ["fix: Bug"]
+    assert remote_head(project) == tip and git(project.local_path, "rev-parse", "HEAD") == later
+
+
+def test_commits_made_before_the_merge_cannot_be_left_behind(project):
+    mine = commit_on_main(project, "mine-before")
+    tip = commit_on_main(project, "fix: Bug", "Ticket: https://notion.so/x")
+    repo.push_base(project, tip)
+    assert remote_head(project) == tip and git(project.local_path, "merge-base", "--is-ancestor", mine, "origin/main") == ""
+
+
+def test_nothing_is_pushed_when_origin_is_ahead_or_already_up_to_date(project, tmp_path):
+    assert repo.push_plan(project)["can_push"] is False and "already on origin" in repo.push_plan(project)["reason"]
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", git(project.local_path, "remote", "get-url", "origin"), str(other))
+    commit_on_main(type("C", (), {"local_path": str(other)}), "theirs")
+    git(other, "push", "-q", "origin", "main")
+    commit_on_main(project, "fix: Bug", "Ticket: https://notion.so/x")
+    plan = repo.push_plan(project)
+    assert plan["can_push"] is False and "pull" in plan["reason"]
+    with pytest.raises(RepoError):
+        repo.push_base(project)
+
+
+def test_a_forgotten_tip_falls_back_to_the_whole_branch(project):
+    commit_on_main(project, "fix: Bug", "Ticket: https://notion.so/x")
+    assert repo.push_plan(project, "0" * 40)["target"] == git(project.local_path, "rev-parse", "main")

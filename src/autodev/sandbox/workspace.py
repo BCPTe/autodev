@@ -1,6 +1,8 @@
+import os
 import re
 import shlex
 import subprocess
+from contextvars import ContextVar
 from dataclasses import dataclass
 from fnmatch import fnmatch
 from pathlib import Path
@@ -39,15 +41,40 @@ class DirtyCheckout(RuntimeError):
     """The user's own checkout has uncommitted work, which an agent must never mix with its own."""
 
 
+NETWORK_COMMANDS = {"fetch", "push", "pull", "clone", "ls-remote"}
+# which .env variable holds the token of the project being worked on (set at the start of each run)
+git_token_env: ContextVar[str] = ContextVar("git_token_env", default="GITHUB_TOKEN")
+
+
+def network_env(token_env: str | None = None, token: str | None = None) -> dict[str, str]:
+    """Environment for git commands that talk to the remote: never ask on a terminal, and use the project's GitHub token over https.
+
+    The token goes through a credential helper that reads it from the environment, so it is never in a command
+    line, a log or a git config file. SSH remotes ignore it.
+    """
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    token = token or os.environ.get(token_env or git_token_env.get())
+    if token:
+        # appended after whatever helpers the user already has: it answers only when nobody else did
+        env.update({
+            "AUTODEV_GIT_TOKEN": token,
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "credential.https://github.com.helper",
+            "GIT_CONFIG_VALUE_0": '!f() { echo username=x-access-token; echo password="$AUTODEV_GIT_TOKEN"; }; f',
+        })
+    return env
+
+
 def run(cmd: str | list[str], cwd: Path, *, timeout: int = 900) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd if isinstance(cmd, list) else shlex.split(cmd),
-        cwd=cwd, capture_output=True, text=True, timeout=timeout,
-    )
+    args = cmd if isinstance(cmd, list) else shlex.split(cmd)
+    networked = len(args) > 1 and args[0] == "git" and args[1] in NETWORK_COMMANDS
+    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=timeout, env=network_env() if networked else None)
 
 
 def sh(cmd: str, cwd: Path, *, timeout: int = 1800) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+    # checks run inside the user's own checkout: they must not leave bytecode behind, or the tree counts as modified
+    # and the next run refuses to start
+    return subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
 
 
 def git(cwd: Path, *args: str) -> str:

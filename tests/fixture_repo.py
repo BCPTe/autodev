@@ -38,6 +38,7 @@ def make_project(root: Path) -> ProjectConfig:
     (local / "shop" / "pricing.py").write_text(PRICING_BUG)
     (local / "tests" / "test_pricing.py").write_text(EXISTING_TEST)
     (local / "CLAUDE.md").write_text(CLAUDE_MD)
+    (local / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n")
     for k, v in (("user.name", "t"), ("user.email", "t@t")):
         _git(local, "config", k, v)
     _git(local, "add", "-A")

@@ -15,14 +15,14 @@ def _explain(r: httpx.Response) -> str:
         text = r.text[:300]
     hint = ""
     if r.status_code == 422 and "already exists" not in text:
-        hint = " (if the branch is pushed, check that GITHUB_TOKEN has 'Contents: read and write' on the repository)"
+        hint = " (if the branch is pushed, check that the GitHub token has 'Contents: read and write' on the repository)"
     return f"GitHub refused the request ({r.status_code}): {text}{hint}"
 
 
 async def create_pull_request(cfg: ProjectConfig, branch: str, title: str, body: str) -> str:
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get(cfg.pr.token_env)
     if not token or not cfg.pr.slug:
-        raise RuntimeError("GITHUB_TOKEN and pr.slug are required to open pull requests")
+        raise RuntimeError(f"{cfg.pr.token_env} and pr.slug are required to open pull requests")
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             f"https://api.github.com/repos/{cfg.pr.slug}/pulls",
@@ -45,11 +45,11 @@ async def create_pull_request(cfg: ProjectConfig, branch: str, title: str, body:
 
 async def verify_access(cfg: ProjectConfig) -> str:
     """Human-readable diagnosis of the GitHub setup (token present, repo reachable, PRs readable)."""
-    token = os.environ.get("GITHUB_TOKEN")
+    token = os.environ.get(cfg.pr.token_env)
     if not cfg.pr.slug:
         return "pr.slug is not configured"
     if not token:
-        return "GITHUB_TOKEN missing in .env"
+        return f"{cfg.pr.token_env} missing in .env"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
     async with httpx.AsyncClient(timeout=30) as client:
         repo = await client.get(f"https://api.github.com/repos/{cfg.pr.slug}", headers=headers)
@@ -71,10 +71,10 @@ async def verify_access(cfg: ProjectConfig) -> str:
     return f"GitHub OK: {cfg.pr.slug} reachable and pull requests readable (write permission only shows when the first PR is opened)"
 
 
-def _headers() -> dict[str, str]:
-    token = os.environ.get("GITHUB_TOKEN")
+def _headers(cfg: ProjectConfig) -> dict[str, str]:
+    token = os.environ.get(cfg.pr.token_env)
     if not token:
-        raise RuntimeError("GITHUB_TOKEN missing in .env")
+        raise RuntimeError(f"{cfg.pr.token_env} missing in .env")
     return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
 
 
@@ -119,7 +119,7 @@ async def _ci_summary(client: httpx.AsyncClient, cfg: ProjectConfig, sha: str) -
 
 async def list_pulls(cfg: ProjectConfig, branch_prefix: str, limit: int = 30) -> list[dict]:
     """Recent pull requests whose branch starts with `branch_prefix`, with check status for the open ones."""
-    async with httpx.AsyncClient(timeout=30, headers=_headers()) as client:
+    async with httpx.AsyncClient(timeout=30, headers=_headers(cfg)) as client:
         r = await client.get(_api(cfg, "/pulls"), params={"state": "all", "sort": "updated", "direction": "desc", "per_page": 50})
         r.raise_for_status()
         out = []
@@ -143,7 +143,7 @@ async def list_pulls(cfg: ProjectConfig, branch_prefix: str, limit: int = 30) ->
 
 
 async def merge_pull(cfg: ProjectConfig, number: int, method: str = "squash") -> str:
-    async with httpx.AsyncClient(timeout=30, headers=_headers()) as client:
+    async with httpx.AsyncClient(timeout=30, headers=_headers(cfg)) as client:
         r = await client.put(_api(cfg, f"/pulls/{number}/merge"), json={"merge_method": method})
         if r.status_code >= 400:
             raise RuntimeError(r.json().get("message", r.text))
@@ -151,6 +151,25 @@ async def merge_pull(cfg: ProjectConfig, number: int, method: str = "squash") ->
 
 
 async def delete_remote_branch(cfg: ProjectConfig, branch: str) -> bool:
-    async with httpx.AsyncClient(timeout=30, headers=_headers()) as client:
+    async with httpx.AsyncClient(timeout=30, headers=_headers(cfg)) as client:
         r = await client.delete(_api(cfg, f"/git/refs/heads/{branch}"))
         return r.status_code in (204, 422)  # 422: already gone
+
+
+async def can_see(token: str, slug: str) -> str | None:
+    """None when the token can see the repository; otherwise why not, in words for the user."""
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"https://api.github.com/repos/{slug}", headers=headers)
+    if r.status_code == 200:
+        return None if r.json().get("permissions", {}).get("push", True) else f"the token can read {slug} but not write to it"
+    if r.status_code in (401, 403):
+        return f"GitHub refused the token ({r.status_code}): check its expiry and that the organisation approved it"
+    return f"the token cannot see {slug}: select that repository in the token's permissions, or use a token from the account that owns it"
+
+
+async def whoami(token: str) -> str | None:
+    """The GitHub login a token belongs to (None when GitHub does not accept it)."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get("https://api.github.com/user", headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+    return r.json().get("login") if r.status_code == 200 else None

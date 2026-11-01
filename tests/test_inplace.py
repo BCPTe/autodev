@@ -148,3 +148,38 @@ def test_a_dirty_checkout_on_any_other_branch_is_still_refused(project):
     (local / "notes.txt").write_text("my own work")
     with pytest.raises(DirtyCheckout):
         Workspace.create(cfg, TICKET)
+
+
+def test_git_commands_that_reach_the_remote_never_prompt_and_use_the_token(monkeypatch):
+    from autodev.sandbox import workspace as ws
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_secret")
+    env = ws.network_env()
+    assert env["GIT_TERMINAL_PROMPT"] == "0" and env["AUTODEV_GIT_TOKEN"] == "ghp_secret"
+    assert "ghp_secret" not in env["GIT_CONFIG_VALUE_0"]   # the helper reads the variable, the secret is not in the config
+    monkeypatch.delenv("GITHUB_TOKEN")
+    assert "AUTODEV_GIT_TOKEN" not in ws.network_env()
+
+
+def test_the_token_really_answers_githubs_credential_question(tmp_path, monkeypatch):
+    import subprocess
+    from autodev.sandbox import workspace as ws
+
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_secret")
+    asked = subprocess.run(["git", "credential", "fill"], input="protocol=https\nhost=github.com\n\n", env=ws.network_env(),
+                           capture_output=True, text=True, cwd=tmp_path)
+    assert "username=x-access-token" in asked.stdout and "password=ghp_secret" in asked.stdout
+
+
+def test_git_uses_the_token_of_the_project_being_worked_on(monkeypatch):
+    from autodev.sandbox import workspace as ws
+
+    monkeypatch.setenv("GITHUB_TOKEN", "default-account")
+    monkeypatch.setenv("GITHUB_TOKEN_SHOP", "shop-account")
+    assert ws.network_env()["AUTODEV_GIT_TOKEN"] == "default-account"
+    assert ws.network_env("GITHUB_TOKEN_SHOP")["AUTODEV_GIT_TOKEN"] == "shop-account"
+    token = ws.git_token_env.set("GITHUB_TOKEN_SHOP")
+    try:
+        assert ws.network_env()["AUTODEV_GIT_TOKEN"] == "shop-account"
+    finally:
+        ws.git_token_env.reset(token)

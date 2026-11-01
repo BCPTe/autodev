@@ -88,3 +88,16 @@ async def test_readable_statuses_are_enough_even_without_check_runs(monkeypatch)
     respx.get(f"{REPO}/commits/abc/status").mock(return_value=httpx.Response(200, json={"statuses": []}))
     respx.get(f"{REPO}/pulls").mock(return_value=httpx.Response(200, json=[]))
     assert "GitHub OK" in await verify_access(CFG)
+
+
+@pytest.mark.asyncio
+async def test_each_project_uses_the_token_named_in_its_config(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "default-account")
+    monkeypatch.setenv("GITHUB_TOKEN_SHOP", "shop-account")
+    shop = CFG.model_copy(update={"pr": CFG.pr.model_copy(update={"token_env": "GITHUB_TOKEN_SHOP"})})
+    from autodev.github import _headers
+
+    assert _headers(CFG)["Authorization"] == "Bearer default-account"
+    assert _headers(shop)["Authorization"] == "Bearer shop-account"
+    monkeypatch.delenv("GITHUB_TOKEN_SHOP")
+    assert "GITHUB_TOKEN_SHOP missing" in await verify_access(shop)

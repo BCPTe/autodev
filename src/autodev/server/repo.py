@@ -1,8 +1,10 @@
 """Read-only view of the project's own checkout (branch, uncommitted files, autodev branches)."""
+import shutil
 import subprocess
 from pathlib import Path
 
 from autodev.config import ProjectConfig
+from autodev.sandbox import workspace
 
 
 def _git(path: Path, *args: str) -> str:
@@ -49,8 +51,9 @@ class RepoError(RuntimeError):
     """An operation on the checkout that was refused or failed; the message is meant for the user."""
 
 
-def _run(path: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], cwd=path, capture_output=True, text=True, timeout=timeout)
+def _run(path: Path, *args: str, timeout: int = 60, token_env: str | None = None) -> subprocess.CompletedProcess[str]:
+    env = workspace.network_env(token_env) if args and args[0] in workspace.NETWORK_COMMANDS else None
+    return subprocess.run(["git", *args], cwd=path, capture_output=True, text=True, timeout=timeout, env=env)
 
 
 def _split_patch(text: str) -> dict[str, str]:
@@ -105,7 +108,7 @@ def checkout(cfg: ProjectConfig, branch: str) -> str:
 def update_base(cfg: ProjectConfig) -> bool:
     """Fast-forwards the checked-out base branch to origin (best effort: never merges, never overwrites)."""
     path = Path(cfg.local_path)
-    if _run(path, "fetch", "--quiet", "origin", cfg.base_branch, timeout=120).returncode != 0:
+    if _run(path, "fetch", "--quiet", "origin", cfg.base_branch, timeout=120, token_env=cfg.pr.token_env).returncode != 0:
         return False
     return _run(path, "merge", "--ff-only", "--quiet", f"origin/{cfg.base_branch}").returncode == 0
 
@@ -172,3 +175,64 @@ def delete_branches(cfg: ProjectConfig, names: list[str], pr_merged: set[str] = 
             raise RepoError(r.stderr.strip() or f"cannot delete {name}")
         done.append(name)
     return done
+
+
+def leftover_clones(cfg: ProjectConfig) -> list[Path]:
+    """Throwaway clones this project's agents left in workspaces/ (shared by all projects, named after the checkout)."""
+    if not workspace.WORKSPACES.is_dir():
+        return []
+    prefix = workspace.slugify(cfg.local_path.rsplit("/", 1)[-1]) + "-"
+    return sorted(d for d in workspace.WORKSPACES.iterdir() if d.is_dir() and d.name.startswith(prefix))
+
+
+def remove_clones(cfg: ProjectConfig) -> list[str]:
+    clones = leftover_clones(cfg)
+    for d in clones:
+        shutil.rmtree(d)
+    return [d.name for d in clones]
+
+
+def _is_ancestor(path: Path, older: str, newer: str) -> bool:
+    return _run(path, "merge-base", "--is-ancestor", older, newer).returncode == 0
+
+
+def push_plan(cfg: ProjectConfig, tip: str | None = None) -> dict:
+    """What pushing the base branch would send to origin, so a person can read it before confirming.
+
+    It stops at `tip` (the commit of the last merge autodev did) when that is still part of the branch, so commits
+    made afterwards stay local. Commits made before it cannot be left behind: git sends every ancestor.
+    """
+    path = Path(cfg.local_path)
+    base, remote = cfg.base_branch, f"origin/{cfg.base_branch}"
+    plan: dict = {"base": base, "commits": [], "target": None, "can_push": False, "reason": None}
+    if _run(path, "fetch", "--quiet", "origin", base, timeout=120, token_env=cfg.pr.token_env).returncode != 0:
+        plan["reason"] = "origin could not be reached, so it is not known what is already there"
+        return plan
+    head = _git(path, "rev-parse", f"refs/heads/{base}")
+    if not head:
+        plan["reason"] = f"there is no local {base} branch"
+        return plan
+    target = tip if tip and _git(path, "rev-parse", "--verify", "--quiet", f"{tip}^{{commit}}") and _is_ancestor(path, tip, head) else head
+    plan["target"] = target
+    if not _is_ancestor(path, remote, target):
+        plan["reason"] = f"origin has commits you do not have yet: pull {base} first, then push"
+        return plan
+    out = _git(path, "log", "--reverse", "--format=%H%x1f%s%x1f%b%x1e", f"{remote}..{target}")
+    for entry in filter(None, (e.strip() for e in out.split("\x1e"))):
+        sha, subject, body = (entry.split("\x1f") + ["", ""])[:3]
+        plan["commits"].append({"sha": sha[:8], "subject": subject, "autodev": "Ticket: " in body})
+    plan["own_count"] = sum(1 for c in plan["commits"] if not c["autodev"])
+    plan["can_push"] = bool(plan["commits"])
+    plan["reason"] = None if plan["commits"] else "everything is already on origin"
+    return plan
+
+
+def push_base(cfg: ProjectConfig, tip: str | None = None) -> dict:
+    """Pushes the base branch to origin up to the planned commit. Never forced: git refuses anything but a plain advance."""
+    plan = push_plan(cfg, tip)
+    if not plan["can_push"]:
+        raise RepoError(plan["reason"] or "nothing to push")
+    r = _run(Path(cfg.local_path), "push", "--quiet", "origin", f"{plan['target']}:refs/heads/{cfg.base_branch}", timeout=120, token_env=cfg.pr.token_env)
+    if r.returncode != 0:
+        raise RepoError((r.stderr.strip().splitlines() or ["the push failed"])[-1])
+    return plan

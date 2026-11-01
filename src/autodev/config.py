@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from autodev.models import Status
 
@@ -78,6 +78,8 @@ class GitIdentity(BaseModel):
 class PRConfig(BaseModel):
     create: bool = False
     slug: str | None = None
+    # Name of the .env variable holding this project's GitHub token (projects on different accounts need their own).
+    token_env: str = Field("GITHUB_TOKEN", pattern=r"^[A-Z_][A-Z0-9_]*$")
 
 
 class Autonomy(BaseModel):
