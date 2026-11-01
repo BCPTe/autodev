@@ -12,6 +12,8 @@ export function useRunStream(runId: number) {
 
   useEffect(() => {
     if (!visible) return
+    // Reset when the run changes; the stream below repopulates it.
+    // oxlint-disable-next-line react/set-state-in-effect
     setEvents([])
     setEnded(false)
     const es = new EventSource(scoped(`/api/runs/${runId}/stream`))
