@@ -35,6 +35,9 @@ class Ticket(BaseModel):
     model: str | None = None
     body: str = ""
     attachments: list[str] = Field(default_factory=list)
+    # filled by `attachments.attach` just before an agent runs: files saved on disk, and why others were not
+    files: list[dict] = Field(default_factory=list)
+    file_notes: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str | None = None
     risk: str | None = None

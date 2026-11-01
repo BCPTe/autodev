@@ -5,7 +5,7 @@ from typing import Literal
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
-from autodev import knowledge
+from autodev import attachments, knowledge
 from autodev.agents.session import isolation, run_session
 from autodev.config import ProjectConfig
 from autodev.models import Risk, Ticket
@@ -108,7 +108,7 @@ Priority: {ticket.priority}
 Environment: {ticket.environment}
 Page URL: {ticket.page_url}
 Reported by: {ticket.reported_by}
-Attachments: {", ".join(ticket.attachments) or "none"}
+{attachments.prompt_section(ticket)}
 
 Description:
 {ticket.body}
@@ -138,6 +138,7 @@ async def _run(
         model=model,
         system_prompt=(SYSTEM_PROMPT.format(area_map=cfg.area_map_text or "(none)", language=cfg.language) + (f"\n\n# Project instructions\n{agent.instructions.strip()}" if agent.instructions else "") + knowledge.section(playbook)),
         cwd=cfg.local_path,
+        add_dirs=attachments.folders(ticket),
         tools=["Read", "Grep", "Glob"],
         allowed_tools=["Read", "Grep", "Glob"],
         permission_mode="dontAsk",

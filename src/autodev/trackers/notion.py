@@ -1,3 +1,6 @@
+from pathlib import PurePosixPath
+from urllib.parse import urlparse
+
 import httpx
 
 from autodev.config import TrackerConfig
@@ -43,6 +46,15 @@ def _author(comment: dict) -> str:
     if _from_dashboard(comment):
         return "dashboard"
     return (comment.get("display_name") or {}).get("resolved_name") or ("autodev" if _is_bot(comment) else "persona")
+
+
+def _file_ref(name: str, obj: dict) -> dict | None:
+    """{name, url, external} for a Notion file object (`type` is "file" for Notion-hosted, "external" for a link)."""
+    kind = obj.get("type")
+    url = (obj.get(kind) or {}).get("url") if kind in ("file", "external") else None
+    if not url:
+        return None
+    return {"name": name or PurePosixPath(urlparse(url).path).name or "file", "url": url, "external": kind == "external"}
 
 
 def _rich(text: str) -> dict:
@@ -97,6 +109,22 @@ class NotionTracker:
             content = block.get(block["type"], {})
             lines.append(_text(content, "rich_text") or "")
         return "\n".join(lines).strip()
+
+    async def attachments(self, ticket_id: str) -> list[dict]:
+        """Files of a ticket: the Attachments column and the file, image and PDF blocks of the page body.
+
+        Notion-hosted URLs are signed and expire within the hour, so this reads the page again right before use.
+        """
+        page = await self._client.get(f"/pages/{ticket_id}")
+        page.raise_for_status()
+        column = page.json()["properties"].get(self._cfg.prop("attachments"), {}).get("files", [])
+        refs = [r for f in column if (r := _file_ref(f.get("name") or "", f))]
+        blocks = await self._client.get(f"/blocks/{ticket_id}/children", params={"page_size": 100})
+        blocks.raise_for_status()
+        for block in blocks.json()["results"]:
+            if block["type"] in ("image", "file", "pdf") and (ref := _file_ref(block[block["type"]].get("name") or "", block[block["type"]])):
+                refs.append(ref)
+        return refs
 
     async def fetch_by_status(self, status: Status, *, authorized_only: bool = True) -> list[Ticket]:
         c = self._cfg

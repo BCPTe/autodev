@@ -9,6 +9,9 @@ class Tracker(Protocol):
 
     async def fetch_by_status(self, status: Status, *, authorized_only: bool = True) -> list[Ticket]: ...
 
+    async def attachments(self, ticket_id: str) -> list[dict]:
+        """Files attached to a ticket, as {name, url, external}."""
+
     async def bot_comments(self, ticket_id: str) -> list[str]:
         """Comments written by the integration itself (e.g. the triage analysis)."""
 

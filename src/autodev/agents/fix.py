@@ -4,7 +4,7 @@ from typing import Literal
 from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ToolUseBlock
 from pydantic import BaseModel
 
-from autodev import knowledge
+from autodev import attachments, knowledge
 from autodev.agents.session import isolation, run_session
 from autodev.config import ProjectConfig
 from autodev.models import Ticket
@@ -62,6 +62,7 @@ Type: {ticket.kind}
 Area: {ticket.area}
 Priority: {ticket.priority}
 Page URL: {ticket.page_url}
+{attachments.prompt_section(ticket)}
 
 Description:
 {ticket.body}
@@ -144,6 +145,7 @@ async def run_fix(
         model=model or agent.models[0],
         system_prompt=system_prompt(ws, expand(agent.commands, cfg), cfg.language, agent.instructions, playbook),
         cwd=str(ws.path),
+        add_dirs=attachments.folders(ticket),
         tools=["Read", "Grep", "Glob", "Edit", "Write", "Bash"],
         allowed_tools=["Read", "Grep", "Glob", "Edit", "Write", *bash],
         permission_mode="dontAsk",

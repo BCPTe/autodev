@@ -2,7 +2,7 @@ from pathlib import Path
 
 import httpx
 
-from autodev import knowledge
+from autodev import attachments, knowledge
 from autodev.agents.triage import RunInfo, TriageResult, escalate_risk, run_triage
 from autodev.agents.usage import last_session_id
 from autodev.config import ProjectConfig
@@ -90,6 +90,7 @@ async def triage_ticket(
         await tracker.set_status(ticket.id, Status.NEEDS_INFO)
         return Status.NEEDS_INFO, [], f"Triage: needs_info\n\n{missing}"
 
+    await attachments.attach(tracker, ticket, Path(cfg.local_path).name)
     try:
         earlier = [c for c in await tracker.bot_comments(ticket.id) if c.startswith("Triage:")]
         result, runs = await run_triage(
@@ -120,7 +121,7 @@ from dataclasses import dataclass, field  # noqa: E402
 from autodev.agents.fix import FixResult, pick_model, run_fix  # noqa: E402
 from autodev.checks import CheckResult, regression_gate, run_checks  # noqa: E402
 from autodev.github import create_pull_request  # noqa: E402
-from autodev.sandbox.workspace import Workspace, matches  # noqa: E402
+from autodev.sandbox.workspace import Workspace, git_token_env, matches  # noqa: E402
 
 
 @dataclass
@@ -188,6 +189,7 @@ async def _escalate(
 async def fix_ticket(
     cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, report: Report | None = None
 ) -> FixOutcome:
+    git_token_env.set(cfg.pr.token_env)
     if ticket.attempts >= cfg.limits.max_fix_runs:
         await _escalate(tracker, ticket, f"already run {ticket.attempts} times (limit {cfg.limits.max_fix_runs}); reset 'Attempts' to try again", 0.0)
         return FixOutcome(Status.ESCALATED, message="max fix runs")
@@ -197,6 +199,7 @@ async def fix_ticket(
         return FixOutcome(Status.ESCALATED, message="budget")
 
     ws = Workspace.create(cfg, ticket)
+    await attachments.attach(tracker, ticket, Path(cfg.local_path).name)
     await tracker.update(ticket.id, attempts=ticket.attempts + 1)
     if report:
         where = f"checkout of {cfg.name or Path(cfg.local_path).name}" if ws.inplace else ws.path.name
@@ -351,7 +354,8 @@ async def _fix_in_workspace(
 
     await _publish(
         tracker, ticket,
-        f"Fix ready and verified locally (push disabled).\nBranch: {ws.branch}\n\n{fix.summary}\n\n{summary}",
+        f"Fix ready and verified locally. Pull requests are off, so nothing was pushed.\nBranch: {ws.branch} (on your machine only)\n"
+        f"Next: try it, merge it from the Repo page, then push the base branch yourself.\n\n{fix.summary}\n\n{summary}",
     )
     await tracker.update(ticket.id, branch=ws.branch, cost_usd=ticket.cost_usd + cost, risk=risk, verification="Passed")
     await tracker.set_status(ticket.id, Status.REVIEW)
@@ -364,6 +368,7 @@ async def publish_ticket(cfg: ProjectConfig, tracker: Tracker, ticket: Ticket, r
     Used when the PR step failed (token, network) after the work was done. The checks are run again;
     the regression gate cannot be, because it needs the run that added the tests.
     """
+    git_token_env.set(cfg.pr.token_env)
     say = report or (lambda _line: None)
     ws = Workspace.create(cfg, ticket)
     if not ws.has_commits():
