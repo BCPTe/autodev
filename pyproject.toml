@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-autodev = "autodev.cli:main"
+autodev = "autodev.__main__:main"
 
 [dependency-groups]
 dev = ["pytest>=9.2.0", "pytest-asyncio>=1.4.1", "respx>=0.23.1"]

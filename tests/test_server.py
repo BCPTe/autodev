@@ -428,3 +428,28 @@ def test_a_failed_run_stops_showing_once_its_ticket_moved_on_or_the_run_is_dismi
     assert client.post("/api/runs/999/dismiss", json={}).status_code == 404
     assert {old, gone, on_review}  # the runs themselves are kept
     assert client.get("/api/runs").json()["runs"] and len(client.get("/api/runs").json()["runs"]) >= 4
+
+
+# ---- no project yet ---------------------------------------------------------------------------
+def test_the_dashboard_starts_without_projects_and_links_one_later(tmp_path):
+    from autodev.engine import Engine
+    from autodev.server.app import Ctx, build_app
+
+    static = tmp_path / "dist"
+    static.mkdir()
+    (static / "index.html").write_text("<html></html>")
+    db = Database(tmp_path / "s.db")
+    app = build_app(db, [], static_dir=static)
+    c = TestClient(app)
+    c.post("/api/auth/setup", json={"password": PASSWORD, "code": app.state.auth.setup_code})
+    assert c.get("/api/projects").json() == {"default": None, "projects": []}
+    assert c.get("/api/overview").status_code == 404
+
+    tracker = FakeTracker()
+    app.state.add_project(Ctx(CFG, "demo", db, tracker, Engine(CFG, "demo", db, tracker)))
+    assert c.get("/api/projects").json()["default"] == "demo"
+    assert c.get("/api/p/demo/overview").status_code == 200
+    assert c.get("/api/overview").status_code == 200
+    assert c.get("/some/page").status_code == 200  # the frontend still answers the rest
+    with pytest.raises(ValueError):
+        app.state.add_project(Ctx(CFG, "demo", db, tracker, Engine(CFG, "demo", db, tracker)))

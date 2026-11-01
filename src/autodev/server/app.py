@@ -1,5 +1,6 @@
 import asyncio
 import json
+import mimetypes
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -18,10 +19,11 @@ from autodev.jobs import daily_cap, mark_orphans, spent_today, start_of_today
 from autodev.models import Comment, Status, Ticket
 from autodev.server import auth as authmod
 from autodev.server.auth import COOKIE, Auth
-from autodev import costs as costs_mod, github, knowledge
+from autodev import attachments as attachments_mod, costs as costs_mod, github, knowledge
 from autodev.server import repo as repomod
 from autodev.sandbox.workspace import identity_flags
 from autodev.server.repo import RepoError, repo_state
+from autodev.setup_check import check_setup
 
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1", "testserver"}
 INBOX_STATES = {Status.NEEDS_INFO, Status.ANALYZED, Status.REVIEW, Status.ESCALATED}
@@ -65,6 +67,7 @@ class Checkout(BaseModel):
 class Cleanup(BaseModel):
     names: list[str] | None = None
     remote: bool = False
+    clones: bool = False
 
 
 class Merge(BaseModel):
@@ -215,6 +218,40 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
         runs = [run_row(r) for r in db.query("SELECT * FROM runs WHERE ticket_id = ? AND project = ? ORDER BY started_at DESC", (ticket_id, project))]
         actions = db.query("SELECT ts, actor, action, detail FROM actions WHERE ticket_id = ? ORDER BY id DESC LIMIT 30", (ticket_id,))
         return {"ticket": ticket.model_dump(exclude={"comments"}), "comments": [c.model_dump() for c in comments], "runs": runs, "actions": actions}
+
+    async def planned_attachments(ticket_id: str) -> list[dict]:
+        if not hasattr(tracker, "attachments"):
+            return []
+        try:
+            return attachments_mod.plan(await tracker.attachments(ticket_id))
+        except Exception as e:
+            raise HTTPException(502, f"Notion is unreachable: {e}")
+
+    @r.get("/tickets/{ticket_id}/attachments", dependencies=[Depends(require_session)])
+    async def ticket_attachments(ticket_id: str):
+        out = []
+        for item in await planned_attachments(ticket_id):
+            kind = mimetypes.guess_type(item["saved"] or item["name"])[0] or "application/octet-stream"
+            out.append({
+                "name": item["name"], "saved": item["saved"], "type": kind, "external": bool(item.get("external")),
+                "url": item["url"] if item.get("external") else None, "inline": kind in attachments_mod.INLINE_TYPES,
+            })
+        return {"attachments": out}
+
+    @r.get("/tickets/{ticket_id}/attachments/{saved}", dependencies=[Depends(require_session)])
+    async def ticket_attachment(ticket_id: str, saved: str):
+        item = next((i for i in await planned_attachments(ticket_id) if i["saved"] == saved), None)
+        if not item:
+            raise HTTPException(404, "no such attachment")
+        async with httpx.AsyncClient(timeout=60) as client:  # signed URLs: no tracker credentials with them
+            try:
+                path = await attachments_mod.ensure(item, attachments_mod.folder(project, ticket_id), client)
+            except Exception as e:
+                raise HTTPException(502, f"The file could not be downloaded: {e}")
+        kind = mimetypes.guess_type(saved)[0] or "application/octet-stream"
+        inline = kind in attachments_mod.INLINE_TYPES
+        return FileResponse(path, media_type=kind, filename=item["name"], content_disposition_type="inline" if inline else "attachment",
+                            headers={"Cache-Control": "private, max-age=300"})
 
     @r.get("/runs", dependencies=[Depends(require_session)])
     def list_runs(limit: int = 50, ticket_id: str | None = None):
@@ -597,9 +634,31 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             raise HTTPException(409, str(e))
         await tracker.set_status(ticket.id, Status.CLOSED)
         engine.after_close(ticket)
+        tip = await asyncio.to_thread(repomod._git, Path(cfg.local_path), "rev-parse", f"refs/heads/{cfg.base_branch}")
+        db.set_setting(f"{project}:merge_tip", tip)  # where "Push" stops: later commits of the user stay local
+        db.set_setting(f"{project}:merge_ticket", ticket.id)  # the ticket whose page offers the push
         db.audit("user", "merge", ticket.id, f"branch {ticket.branch}")
         cache["at"] = 0.0
         return {"ok": True, "back_on": base}
+
+    class PushBody(BaseModel):
+        confirm: bool = False
+
+    @r.get("/repo/push", dependencies=[Depends(require_session)])
+    async def repo_push_plan():
+        plan = await asyncio.to_thread(repomod.push_plan, cfg, db.get_setting(f"{project}:merge_tip"))
+        return {**plan, "ticket_id": db.get_setting(f"{project}:merge_ticket")}
+
+    @r.post("/repo/push", dependencies=[Depends(require_session)])
+    async def repo_push(body: PushBody):
+        if not body.confirm:
+            raise HTTPException(422, "explicit confirmation is required")
+        try:
+            plan = await asyncio.to_thread(repomod.push_base, cfg, db.get_setting(f"{project}:merge_tip"))
+        except RepoError as e:
+            raise HTTPException(409, str(e))
+        db.audit("user", "push", None, f"{cfg.base_branch}: {len(plan['commits'])} commit(s)")
+        return {"ok": True, "pushed": len(plan["commits"]), "base": cfg.base_branch}
 
     def checkout_guard() -> None:
         if engine.busy():
@@ -639,8 +698,9 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
                         remote_deleted.append(name)
                 except Exception:
                     pass
-        db.audit("user", "cleanup", None, ", ".join(deleted))
-        return {"deleted": deleted, "remote_deleted": remote_deleted}
+        clones = await asyncio.to_thread(repomod.remove_clones, cfg) if body.clones else []
+        db.audit("user", "cleanup", None, ", ".join(deleted + clones))
+        return {"deleted": deleted, "remote_deleted": remote_deleted, "clones_removed": clones}
 
     @r.post("/repo/checks", dependencies=[Depends(require_session)])
     async def repo_checks():
@@ -650,10 +710,15 @@ def project_router(ctx: Ctx, require_session) -> APIRouter:
             raise HTTPException(409, str(e))
         return {"ok": True}
 
+    @r.get("/setup-check", dependencies=[Depends(require_session)])
+    async def setup_check():
+        return await check_setup(cfg, tracker)
+
     @r.get("/repo", dependencies=[Depends(require_session)])
     async def repo():
         state = await asyncio.to_thread(repo_state, cfg, await merged_heads())
         state["busy"] = engine.busy()
+        state["clones"] = len(repomod.leftover_clones(cfg))
         return state
 
     @r.get("/config", dependencies=[Depends(require_session)])
@@ -685,17 +750,27 @@ def create_app(
     static_dir: Path | None = DIST, engine: Engine | None = None, run_loop: bool = False,
     others: list[Ctx] | None = None,
 ) -> FastAPI:
-    """One dashboard for one or more projects.
+    """One dashboard for one or more projects (see build_app)."""
+    engine = engine or Engine(cfg, project, db, tracker)
+    return build_app(db, [Ctx(cfg, project, db, tracker, engine), *(others or [])], static_dir=static_dir, run_loop=run_loop)
+
+
+def build_app(
+    db: Database, contexts: list[Ctx], *, static_dir: Path | None = DIST, run_loop: bool = False,
+    projects_dir: Path = Path("projects"), env_path: Path = Path(".env"),
+) -> FastAPI:
+    """The dashboard, with zero or more projects; more can be added while it runs (`app.state.add_project`).
 
     The first project is also served at /api/...; every project (that one included) lives at
     /api/p/<name>/..., which is what the dashboard uses once it knows the project list.
     """
-    engine = engine or Engine(cfg, project, db, tracker)
-    contexts = [Ctx(cfg, project, db, tracker, engine), *(others or [])]
+    contexts = list(contexts)
+    loops: list[asyncio.Future] = []
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        loops = [asyncio.ensure_future(c.engine.run_forever()) for c in contexts] if run_loop else []
+        if run_loop:
+            loops.extend(asyncio.ensure_future(c.engine.run_forever()) for c in contexts)
         yield
         for loop in loops:
             loop.cancel()
@@ -714,7 +789,7 @@ def create_app(
         return JSONResponse({"detail": f"{host} answered {e.response.status_code}: {detail}{hint}"}, status_code=502)
     auth = Auth(db)
     app.state.auth = auth
-    app.state.engine = engine
+    app.state.engine = contexts[0].engine if contexts else None
     mark_orphans(db)
 
     @app.middleware("http")
@@ -776,9 +851,38 @@ def create_app(
         return {"ok": True}
 
     # ---- projects ------------------------------------------------------------------------
-    for c in contexts:
+    def mount(c: Ctx) -> None:
         app.include_router(project_router(c, require_session), prefix=f"/api/p/{c.project}")
-    app.include_router(project_router(contexts[0], require_session), prefix="/api")
+
+    for c in contexts:
+        mount(c)
+    if contexts:
+        app.include_router(project_router(contexts[0], require_session), prefix="/api")
+
+    def add_project(c: Ctx) -> None:
+        """Link a project to the running dashboard: its routes, and its automatic loop when the app has one."""
+        if any(x.project == c.project for x in contexts):
+            raise ValueError(f"project already linked: {c.project}")
+        first = not contexts
+        contexts.append(c)
+        mount(c)
+        if first:
+            app.state.engine = c.engine
+            app.include_router(project_router(c, require_session), prefix="/api")
+        # the frontend's catch-all must stay last, or it would answer for the new routes
+        app.router.routes.sort(key=lambda route: getattr(route, "name", "") == "spa")
+        if run_loop:
+            loops.append(asyncio.ensure_future(c.engine.run_forever()))
+
+    app.state.add_project = add_project
+
+    from autodev.server.setup import setup_router
+
+    app.include_router(
+        setup_router(require_session, db=db, projects_dir=projects_dir, env_path=env_path,
+                     link=lambda app, cfg, name, tracker, engine: add_project(Ctx(cfg, name, db, tracker, engine))),
+        prefix="/api",
+    )
 
     @app.get("/api/projects", dependencies=[Depends(require_session)])
     def list_projects():
@@ -786,7 +890,7 @@ def create_app(
             return db.one(sql, (name,))["n"]
 
         return {
-            "default": project,
+            "default": contexts[0].project if contexts else None,
             "projects": [
                 {
                     "name": c.project,

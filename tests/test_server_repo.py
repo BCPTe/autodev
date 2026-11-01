@@ -92,7 +92,42 @@ def test_branch_checkout_and_cleanup_go_through_the_guards(env):
     assert c.post("/api/repo/checkout", json={"branch": "main"}).status_code == 200
     assert c.post("/api/repo/cleanup", json={"names": ["autodev/open"]}).status_code == 409
     done = c.post("/api/repo/cleanup", json={"remote": True}).json()
-    assert done == {"deleted": ["autodev/done"], "remote_deleted": ["autodev/done"]}
+    assert done == {"deleted": ["autodev/done"], "remote_deleted": ["autodev/done"], "clones_removed": []}
+
+
+def test_leftover_clones_are_listed_and_removed_only_for_this_project(env, monkeypatch, tmp_path):
+    from autodev.sandbox import workspace
+
+    c, cfg, *_ = env
+    monkeypatch.setattr(workspace, "WORKSPACES", cfg_root := tmp_path / "ws-test")
+    mine = workspace.slugify(cfg.local_path.rsplit("/", 1)[-1])
+    (cfg_root / f"{mine}-abc12345").mkdir(parents=True)
+    (cfg_root / "other-project-abc12345").mkdir()
+    assert c.get("/api/repo").json()["clones"] == 1
+    done = c.post("/api/repo/cleanup", json={"names": [], "clones": True}).json()
+    assert done["clones_removed"] == [f"{mine}-abc12345"]
+    assert (cfg_root / "other-project-abc12345").is_dir()
+    assert c.get("/api/repo").json()["clones"] == 0
+
+
+def test_setup_check_reports_notion_and_github(env, monkeypatch):
+    c, _, _, tracker, *_ = env
+
+    async def verify():
+        return ["Title", "Status"]
+
+    async def verify_access(cfg):
+        return "GitHub OK"
+
+    async def fetch_ready():
+        return []
+
+    tracker.verify = verify
+    tracker.fetch_ready = fetch_ready
+    monkeypatch.setattr(github, "verify_access", verify_access)
+    out = c.get("/api/setup-check").json()
+    assert out["notion"]["ok"] and out["notion"]["properties"] == 2
+    assert out["github"] == "GitHub OK"
 
 
 def test_repo_changes_are_refused_while_an_agent_works(env):
@@ -122,3 +157,17 @@ def test_a_pull_request_whose_checks_cannot_be_read_is_not_merged_blindly(env):
     state["prs"] = [pr(1, verdict="unknown")]
     r = c.post("/api/prs/1/merge", json={"confirm": True})
     assert r.status_code == 409 and "cannot be read" in r.json()["detail"] and state["merged"] == []
+
+
+def test_push_needs_confirmation_and_goes_through_the_plan(env):
+    c, cfg, db, *_ = env
+    assert c.post("/api/repo/push", json={}).status_code == 422
+    assert c.get("/api/repo/push").json()["can_push"] is False       # nothing ahead of origin yet
+    assert c.get("/api/repo/push").json()["ticket_id"] is None        # no local merge has happened
+    assert c.post("/api/repo/push", json={"confirm": True}).status_code == 409
+    git(cfg.local_path, "commit", "--allow-empty", "-qm", "fix: Bug\n\nTicket: https://notion.so/x")
+    plan = c.get("/api/repo/push").json()
+    assert plan["can_push"] and plan["commits"][0]["autodev"] is True
+    done = c.post("/api/repo/push", json={"confirm": True}).json()
+    assert done == {"ok": True, "pushed": 1, "base": cfg.base_branch}
+    assert db.one("SELECT action FROM actions WHERE action = 'push'")

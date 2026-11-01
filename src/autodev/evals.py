@@ -90,7 +90,7 @@ async def build_cases(cfg: ProjectConfig, project: str, tracker: NotionTracker) 
 def load_cases(project: str) -> list[dict]:
     path = cases_path(project)
     if not path.exists():
-        raise SystemExit(f"no eval cases: run `autodev eval build --project {project}` first")
+        raise SystemExit(f"no eval cases: build the cases first")
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
