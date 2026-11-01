@@ -4,6 +4,20 @@ Orchestrator that turns tracker tickets (Notion) into verified pull requests usi
 
 Start from `projects/example.yaml.dist`; `projects/sandbox.yaml.dist` is a toy project for cheap trials.
 
+![Dashboard: tickets by status, what needs your decision, and the run in progress](docs/screenshots/now.png)
+
+<details>
+<summary>More screenshots</summary>
+
+![Ticket page with decisions and live run console](docs/screenshots/ticket.png)
+![Pull requests with checks and risk](docs/screenshots/pull-requests.png)
+![Learnings: playbook entries and pending proposals](docs/screenshots/learnings.png)
+![Settings with the "differs from project file" banner](docs/screenshots/settings.png)
+![Costs by stage and model](docs/screenshots/costs.png)
+![Dashboard, dark theme](docs/screenshots/now-dark.png)
+
+</details>
+
 ## Requirements
 
 Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 20+ (dashboard), `git`, a Notion integration, optionally a GitHub token, and access to Claude through the Claude Agent SDK.

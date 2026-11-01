@@ -86,7 +86,7 @@ function ProposalCard({ p }: { p: Proposal }) {
           <>
             <Button size="sm" disabled={pending} onClick={() => accept()} leftIcon={<Check />}>Accept</Button>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => setEditing(true)} leftIcon={<Pencil />}>Edit and accept</Button>
-            <Button size="sm" variant="ghost" disabled={pending} onClick={() => act(() => post(`/api/learnings/${p.id}/reject`, {}), "Proposal rejected")} leftIcon={<X />}>Reject</Button>
+            <Button size="sm" variant="ghost" color="red" disabled={pending} onClick={() => act(() => post(`/api/learnings/${p.id}/reject`, {}), "Proposal rejected")} leftIcon={<X />}>Reject</Button>
           </>
         )}
       </div>

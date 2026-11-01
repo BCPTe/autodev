@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useConfig, useOverview, usePrs, useTicket } from "@/hooks/queries"
 import { type Comment, type Run, type Ticket, type TicketAction } from "@/lib/api"
 import { ago, duration, money, shortModel } from "@/lib/format"
-import { JOURNEY, journeyStep, KIND_LABEL, RUN_LABEL, RUN_LAMP, STATES } from "@/lib/status"
+import { fixPhase, JOURNEY, journeyStep, KIND_LABEL, RUN_LABEL, RUN_LAMP, STATES } from "@/lib/status"
 import { latestUnderstanding, type Understanding } from "@/lib/understanding"
 import { cn } from "@/lib/utils"
 import { PrRow } from "@/pages/Prs"
@@ -47,15 +47,29 @@ function Journey({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
 }
 
 /** Who has to act now and how: the one place a person looks to move the ticket on. */
-function NextStep({ ticket }: { ticket: Ticket }) {
+function NextStep({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
+  const { data: overview } = useOverview()
   const meta = STATES[ticket.status]
+  const ahead = overview?.running.find((r) => r.ticket_id !== ticket.id)
+  const phase = ticket.status === "in_progress" ? fixPhase(runs, overview?.control) : null
   const yours = meta.owner === "you"
   return (
     <section aria-labelledby="next-step" className={cn("rounded-lg border p-4", yours ? "border-primary/50 bg-accent/30" : "bg-card")}>
       <h2 id="next-step" className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {yours ? "Your move" : meta.owner === "autodev" ? "autodev's move" : "Done"}
       </h2>
-      <p className="mb-3 text-[15px] font-medium">{meta.hint || "Nothing left to do."}</p>
+      <p className="mb-3 text-[15px] font-medium">{phase ? <>{phase.title}<span className="block text-[13px] font-normal text-muted-foreground">{phase.hint}</span></> : meta.hint || "Nothing left to do."}</p>
+      {phase?.key === "queued" && ahead && (
+        <Link to={`/tickets/${ahead.ticket_id}`} className="mb-3 flex items-center gap-2.5 rounded-md border border-lamp-violet/40 bg-background/60 px-3 py-2 text-[13px] transition-colors hover:border-primary/60">
+          <Lamp kind="violet" live />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs text-muted-foreground">In front of it: {KIND_LABEL[ahead.kind].toLowerCase()} on {ahead.ticket_id}</span>
+            <span className="block truncate font-medium">{ahead.ticket_title || ahead.ticket_id}</span>
+          </span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{duration(Date.now() / 1000 - ahead.started_at)}</span>
+          <ArrowUpRight className="size-4 shrink-0 text-primary" aria-hidden />
+        </Link>
+      )}
       <TicketControls ticket={ticket} />
     </section>
   )
@@ -333,7 +347,7 @@ export function TicketPage() {
   const result = (pr || t.branch) && (
     <section aria-labelledby="result" className="space-y-3">
       <h2 id="result" className="text-lg font-semibold">Result</h2>
-      {pr && <ul className="divide-y border-y"><PrRow p={pr} /></ul>}
+      {pr && <ul className="divide-y border-y"><PrRow p={pr} bare /></ul>}
       {t.branch && (
         <div>
           <button className="flex items-center gap-1 text-[14px] font-medium" aria-expanded={diffOpen} onClick={() => setShowDiff(!diffOpen)}>
@@ -375,7 +389,7 @@ export function TicketPage() {
       <div className="grid gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.8fr)]">
         <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-start-1 lg:self-start">
           {approvals.map((a) => <ApprovalCard key={a.id} a={a} showRun={false} />)}
-          <NextStep ticket={t} />
+          <NextStep ticket={t} runs={data.runs} />
           {t.agent_note && (t.status === "escalated" || t.status === "needs_info") && (
             <p className="whitespace-pre-wrap rounded-md border border-lamp-amber/50 bg-lamp-amber/10 p-3 text-[13px] leading-relaxed">{t.agent_note}</p>
           )}

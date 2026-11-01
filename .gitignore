@@ -14,7 +14,6 @@ projects/*
 !projects/sandbox.yaml.dist
 !projects/sandbox.area_map.md
 e2e/*/node_modules/
-e2e/engfill/
 
 # Claude Code local state / worktrees
 .claude/

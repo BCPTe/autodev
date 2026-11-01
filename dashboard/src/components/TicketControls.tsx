@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck, X } from "lucide-react"
+import { ExternalLink, GitPullRequest, Lightbulb, Play, RotateCcw, ShieldCheck, X } from "lucide-react"
 import { MergeBranchButton } from "@/components/NeedsYouCards"
+import { MergePrButton } from "@/pages/Prs"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { useConfig, useOverview } from "@/hooks/queries"
+import { useConfig, useOverview, usePrs } from "@/hooks/queries"
 import { useAct } from "@/hooks/useAct"
 import { patch, post, type Ticket, type TicketState } from "@/lib/api"
 
@@ -41,6 +42,8 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
   const { act, pending } = useAct()
   const { data: overview } = useOverview()
   const { data: config } = useConfig()
+  const { data: prs } = usePrs()
+  const pr = prs?.prs.find((p) => p.state === "open" && (p.url === t.pr_url || p.ticket?.id === t.id || (!!t.branch && p.branch === t.branch)))
   const blocked = blockedReason(overview?.control)
   const state: TicketState = t.status
 
@@ -75,10 +78,20 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
             {startBtn("triage", "Analyse again")}
           </>
         )}
-        {state === "in_progress" && startBtn("fix", "Start fix", "default")}
+        {state === "in_progress" && (
+          <>
+            {startBtn("fix", "Start fix", "default")}
+            {!overview?.running.some((r) => r.ticket_id === t.id) && <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("analyzed", "Approval withdrawn")} leftIcon={<RotateCcw />}>Withdraw approval</Button>}
+          </>
+        )}
         {state === "review" && (
           <>
-          <MergeBranchButton ticket={t} />
+          {pr ? (
+            <>
+              <MergePrButton p={pr} />
+              <Button asChild size="sm" variant="outline"><a href={pr.url} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink /></a></Button>
+            </>
+          ) : <MergeBranchButton ticket={t} />}
           <Button size="sm" variant="secondary" disabled={pending} onClick={() => setStatus("in_progress", "Moved back to In progress")} leftIcon={<RotateCcw />}>Move back to In progress</Button>
           </>
         )}
@@ -97,7 +110,7 @@ export function TicketControls({ ticket: t }: { ticket: Ticket }) {
         {state === "escalated" && (
           <Button size="sm" variant={canOpenPr ? "secondary" : "default"} disabled={pending} onClick={() => setStatus("in_progress", "Ready to run again: attempts reset", { attempts: 0 })} leftIcon={<RotateCcw />}>Retry (reset attempts)</Button>
         )}
-        {blocked && (state === "new" || state === "in_progress") && <span className="text-xs text-muted-foreground">{blocked}</span>}
+        {blocked && state === "new" && <span className="text-xs text-muted-foreground">{blocked}</span>}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">

@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { ExternalLink, GitMerge } from "lucide-react"
+import { Check, Clock, ExternalLink, GitMerge, X } from "lucide-react"
 import { PageHeader } from "@/components/PageHeader"
 import { Lamp } from "@/components/Lamp"
+import { Level } from "@/components/Level"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePrs } from "@/hooks/queries"
@@ -27,11 +28,39 @@ export function mergeBlocker(p: Pr): string | null {
   return null
 }
 
-export function PrRow({ p }: { p: Pr }) {
+/** "3 of 4 checks passed" with an icon for the verdict; the plain verdict when there is nothing to count. */
+function ChecksSummary({ c }: { c: NonNullable<Pr["checks"]> }) {
+  if (c.verdict === "none" || c.verdict === "unknown" || !c.total)
+    return <div className="flex items-center gap-2"><Lamp kind={c.verdict === "unknown" ? "amber" : "idle"} className="size-2" />{CHECKS[c.verdict]}</div>
+  const passed = Math.max(0, c.total - c.failed - c.pending)
+  const [Icon, tone] = c.failed ? [X, "text-lamp-red"] : c.pending ? [Clock, "text-lamp-amber"] : [Check, "text-lamp-green"]
+  return <div className="flex items-center gap-1.5"><Icon className={`size-4 ${tone}`} strokeWidth={2.5} aria-hidden />{passed} of {c.total} checks passed{c.failed > 0 && `, ${c.failed} failed`}{c.pending > 0 && `, ${c.pending} running`}</div>
+}
+
+/** Squash merge behind a confirming second click, with the reason when it cannot be merged. */
+export function MergePrButton({ p }: { p: Pr }) {
   const { act, pending } = useAct()
   const [armed, setArmed] = useState(false)
+  const blocker = mergeBlocker(p)
+  return (
+    <>
+      <Button
+        size="sm"
+        disabled={pending || !!blocker}
+        title={blocker ?? undefined}
+        onClick={() => (armed ? (setArmed(false), act(() => post(`/api/prs/${p.number}/merge`, { confirm: true }), (r) => ((r as { back_on?: string | null }).back_on ? `Pull request merged; checkout back on ${(r as { back_on: string }).back_on}` : "Pull request merged"))) : (setArmed(true), setTimeout(() => setArmed(false), 4000)))}
+        leftIcon={<GitMerge />}
+      >
+        {armed ? "Confirm: squash and merge" : "Merge"}
+      </Button>
+      {blocker && <span className="text-[13px] font-medium text-foreground">Merge unavailable: {blocker}</span>}
+    </>
+  )
+}
+
+/** `bare` leaves out the action row, for a page that offers the actions elsewhere. */
+export function PrRow({ p, bare = false }: { p: Pr; bare?: boolean }) {
   const [open, setOpen] = useState(false)
-  const blocker = p.state === "open" ? mergeBlocker(p) : null
 
   return (
     <li className="space-y-2 py-4">
@@ -45,11 +74,9 @@ export function PrRow({ p }: { p: Pr }) {
       </div>
 
       <dl className="ml-5 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
-        {p.checks && (
-          <div className="flex items-center gap-2"><Lamp kind={p.checks.verdict === "passing" ? "green" : p.checks.verdict === "failing" ? "red" : p.checks.verdict === "pending" || p.checks.verdict === "unknown" ? "amber" : "idle"} className="size-2" />{CHECKS[p.checks.verdict]}</div>
-        )}
+        {p.checks && <ChecksSummary c={p.checks} />}
         {p.checks?.note && <div className="text-muted-foreground">{p.checks.note}</div>}
-        {p.ticket && <div>Risk {p.ticket.risk ?? "—"}</div>}
+        {p.ticket && <div className="flex items-center gap-1.5">Risk <Level value={p.ticket.risk} /></div>}
         {p.ticket?.verification && <div>autodev verification: {p.ticket.verification}</div>}
         {p.mergeable === false && <div className="text-destructive">Conflicts</div>}
       </dl>
@@ -63,21 +90,10 @@ export function PrRow({ p }: { p: Pr }) {
         </div>
       )}
 
-      <div className="ml-5 flex flex-wrap items-center gap-2">
+      {!bare && <div className="ml-5 flex flex-wrap items-center gap-2">
         <Button asChild size="sm" variant="outline"><a href={p.url} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink /></a></Button>
-        {p.state === "open" && (
-          <Button
-            size="sm"
-            disabled={pending || !!blocker}
-            title={blocker ?? undefined}
-            onClick={() => (armed ? (setArmed(false), act(() => post(`/api/prs/${p.number}/merge`, { confirm: true }), (r) => ((r as { back_on?: string | null }).back_on ? `Pull request merged; checkout back on ${(r as { back_on: string }).back_on}` : "Pull request merged"))) : (setArmed(true), setTimeout(() => setArmed(false), 4000)))}
-            leftIcon={<GitMerge />}
-          >
-            {armed ? "Confirm: squash and merge" : "Merge"}
-          </Button>
-        )}
-        {blocker && <span className="text-[13px] font-medium text-foreground">Merge unavailable: {blocker}</span>}
-      </div>
+        {p.state === "open" && <MergePrButton p={p} />}
+      </div>}
     </li>
   )
 }
