@@ -5,7 +5,7 @@ description = "Turns tracker tickets into verified pull requests using Claude ag
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
-    "pydantic>=2.14.1",
+    "pydantic>=2.14.2",
     "pyyaml>=6.0.3",
     "python-dotenv>=1.2.4",
     "claude-agent-sdk>=0.2.174",
