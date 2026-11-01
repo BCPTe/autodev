@@ -14,6 +14,7 @@ import { Prs } from "@/pages/Prs"
 import { Repo } from "@/pages/Repo"
 import { RunDetail } from "@/pages/RunDetail"
 import { Runs } from "@/pages/Runs"
+import { Setup } from "@/pages/Setup"
 import { Settings } from "@/pages/Settings"
 import { TicketPage } from "@/pages/TicketPage"
 import { Tickets } from "@/pages/Tickets"
@@ -37,7 +38,7 @@ function Gate() {
   if (isError || !data) {
     return (
       <main className="grid min-h-screen place-items-center px-4 text-center">
-        <p className="max-w-sm text-muted-foreground">The server is not responding. Start the dashboard with <code className="font-mono">uv run autodev serve</code> and reload the page.</p>
+        <p className="max-w-sm text-muted-foreground">The server is not responding. Start the dashboard with <code className="font-mono">uv run autodev</code> and reload the page.</p>
       </main>
     )
   }
@@ -51,13 +52,14 @@ function Routed() {
     queryKey: ["projects-boot"],
     staleTime: Infinity,
     queryFn: async () => {
-      const list = await api<{ default: string; projects: ProjectInfo[] }>("/api/projects")
+      const list = await api<{ default: string | null; projects: ProjectInfo[] }>("/api/projects")
       const stored = storedProject()
-      setProject(list.projects.some((p) => p.name === stored) ? stored! : list.default)
+      if (list.default) setProject(list.projects.some((p) => p.name === stored) ? stored! : list.default)
       return list
     },
   })
   if (!data) return null
+  if (data.projects.length === 0) return <Setup />
 
   return (
     <BrowserRouter>

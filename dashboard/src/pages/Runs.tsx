@@ -15,7 +15,7 @@ export function Runs() {
       <PageHeader title="Activity">Triage, fix and check runs started from the terminal or the dashboard</PageHeader>
       {isLoading && <Skeleton className="h-64 w-full" />}
       {data && data.runs.length === 0 && (
-        <p className="py-6 text-muted-foreground">No activity yet. Run <code className="font-mono">uv run autodev triage</code> and it will show up here.</p>
+        <p className="py-6 text-muted-foreground">No activity yet. Start a ticket and its runs will show up here.</p>
       )}
       {data && data.runs.length > 0 && (
         <div className="overflow-x-auto rounded-sm border bg-card">

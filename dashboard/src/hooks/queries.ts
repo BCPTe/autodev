@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { api, type Comment, type ProjectInfo, type DiffFile, type Pr, type Interactive, type Knowledge, type TicketAction, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
+import { api, type Comment, type ProjectInfo, type DiffFile, type Pr, type Interactive, type Knowledge, type TicketAction, type AttachmentInfo, type PushPlan, type Config, type Costs, type Overview, type RepoState, type Run, type RunEvent, type Ticket } from "@/lib/api"
 
 export const useOverview = () =>
   useQuery({ queryKey: ["overview"], queryFn: () => api<Overview>("/api/overview"), refetchInterval: 60000 })
@@ -44,9 +44,22 @@ export const useDiff = (branch: string | null, open: boolean) =>
 export const useProjects = () =>
   useQuery({
     queryKey: ["projects"],
-    queryFn: () => api<{ default: string; projects: ProjectInfo[] }>("/api/projects"),
+    queryFn: () => api<{ default: string | null; projects: ProjectInfo[] }>("/api/projects"),
     refetchInterval: 10000,
   })
 
 export const useKnowledge = () =>
   useQuery({ queryKey: ["knowledge"], queryFn: () => api<Knowledge>("/api/knowledge") })
+
+/** The files attached to a ticket (the column and the images and files in its description). */
+export const useAttachments = (id: string | null) =>
+  useQuery({
+    queryKey: ["attachments", id],
+    enabled: !!id,
+    staleTime: 5 * 60_000,
+    queryFn: () => api<{ attachments: AttachmentInfo[] }>(`/api/tickets/${encodeURIComponent(id!)}/attachments`),
+  })
+
+/** What pushing the base branch to origin would send (it asks origin, so it is read on demand). */
+export const usePushPlan = (enabled = true) =>
+  useQuery({ queryKey: ["push-plan"], enabled, staleTime: 0, queryFn: () => api<PushPlan>("/api/repo/push") })

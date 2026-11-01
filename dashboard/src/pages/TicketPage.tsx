@@ -2,8 +2,10 @@ import { useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronRight, ExternalLink, Info, MessageSquareWarning } from "lucide-react"
 import { ApprovalCard } from "@/components/ApprovalCard"
+import { Attachments } from "@/components/Attachments"
 import { DiffView } from "@/components/DiffView"
 import { Lamp } from "@/components/Lamp"
+import { PushPanel } from "@/components/PushPanel"
 import { RunFeed } from "@/components/RunFeed"
 import { Level } from "@/components/Level"
 import { StateLabel } from "@/components/StateLabel"
@@ -12,7 +14,7 @@ import { ACTION_LABEL, CloseTicket, CommentBox, TicketControls } from "@/compone
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useConfig, useOverview, usePrs, useTicket } from "@/hooks/queries"
+import { useConfig, useOverview, usePrs, usePushPlan, useTicket } from "@/hooks/queries"
 import { type Comment, type Run, type Ticket, type TicketAction } from "@/lib/api"
 import { ago, duration, money, shortModel } from "@/lib/format"
 import { fixPhase, JOURNEY, journeyStep, KIND_LABEL, RUN_LABEL, RUN_LAMP, STATES } from "@/lib/status"
@@ -49,16 +51,26 @@ function Journey({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
 /** Who has to act now and how: the one place a person looks to move the ticket on. */
 function NextStep({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
   const { data: overview } = useOverview()
+  const { data: config } = useConfig()
+  // the ticket whose branch was last merged on this machine is where the push is offered (only without pull requests)
+  const mergedHere = ticket.status === "closed" && !ticket.pr_url && config?.pr_enabled === false
+  const { data: push } = usePushPlan(mergedHere)
+  const pushing = mergedHere && !!push?.can_push && push.ticket_id === ticket.id
   const meta = STATES[ticket.status]
   const ahead = overview?.running.find((r) => r.ticket_id !== ticket.id)
   const phase = ticket.status === "in_progress" ? fixPhase(runs, overview?.control) : null
-  const yours = meta.owner === "you"
+  const yours = meta.owner === "you" || pushing
+  // with pull requests off nothing is pushed: the fix lives on a local branch and the user pushes after merging it
+  const localOnly = ticket.status === "review" && !ticket.pr_url
+  const hint = localOnly
+    ? `The fix is on the local branch ${ticket.branch ?? ""} and nothing was pushed. Try it, merge it from the Repo page, then push ${ticket.branch ? "the base branch" : "it"} yourself.`
+    : meta.hint
   return (
     <section aria-labelledby="next-step" className={cn("rounded-lg border p-4", yours ? "border-primary/50 bg-accent/30" : "bg-card")}>
       <h2 id="next-step" className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {yours ? "Your move" : meta.owner === "autodev" ? "autodev's move" : "Done"}
       </h2>
-      <p className="mb-3 text-[15px] font-medium">{phase ? <>{phase.title}<span className="block text-[13px] font-normal text-muted-foreground">{phase.hint}</span></> : meta.hint || "Nothing left to do."}</p>
+      <p className="mb-3 text-[15px] font-medium">{pushing ? <>Merged on your computer<span className="block text-[13px] font-normal text-muted-foreground">It is not on origin yet. Push it when you are ready.</span></> : phase ? <>{phase.title}<span className="block text-[13px] font-normal text-muted-foreground">{phase.hint}</span></> : hint || "Nothing left to do."}</p>
       {phase?.key === "queued" && ahead && (
         <Link to={`/tickets/${ahead.ticket_id}`} className="mb-3 flex items-center gap-2.5 rounded-md border border-lamp-violet/40 bg-background/60 px-3 py-2 text-[13px] transition-colors hover:border-primary/60">
           <Lamp kind="violet" live />
@@ -72,7 +84,7 @@ function NextStep({ ticket, runs }: { ticket: Ticket; runs: Run[] }) {
           <ArrowUpRight className="size-4 shrink-0 text-primary" aria-hidden />
         </Link>
       )}
-      <TicketControls ticket={ticket} />
+      {pushing ? <PushPanel quiet /> : <TicketControls ticket={ticket} />}
     </section>
   )
 }
@@ -404,6 +416,8 @@ export function TicketPage() {
             <h2 id="description" className="mb-2 text-lg font-semibold">Description</h2>
             <p className="max-w-[72ch] whitespace-pre-wrap text-[14px] leading-relaxed">{t.body || "No description."}</p>
           </section>
+
+          <Attachments ticketId={t.id} />
 
           {result}
 

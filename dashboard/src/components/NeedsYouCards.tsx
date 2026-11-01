@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, GitMerge, ShieldCheck, X } from "lucide-react";
+import { Check, ExternalLink, GitMerge, ShieldCheck, X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import { DiffView } from "@/components/DiffView";
+import { MERGED_EVENT } from "@/components/PushAfterMerge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Lamp } from "@/components/Lamp";
@@ -85,13 +86,15 @@ function Checks({ checks }: { checks: NonNullable<Pr["checks"]> }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1" aria-label="GitHub checks">
       <li className="flex items-center gap-1.5">
-        <Lamp kind="green" className="size-2" />
-        {passed} passed
+        <Check className={checks.failed ? "size-3.5 text-muted-foreground" : "size-3.5 text-green-600"} />
+        {passed}/{checks.total} checks passed
       </li>
-      <li className="flex items-center gap-1.5">
-        <Lamp kind={checks.failed ? "red" : "idle"} className="size-2" />
-        {checks.failed} failed
-      </li>
+      {checks.failed > 0 && (
+        <li className="flex items-center gap-1.5">
+          <Lamp kind="red" className="size-2" />
+          {checks.failed} failed
+        </li>
+      )}
       {checks.pending > 0 && (
         <li className="flex items-center gap-1.5">
           <Lamp kind="amber" className="size-2" />
@@ -114,7 +117,11 @@ export function MergeBranchButton({ ticket }: { ticket: Pick<Item["ticket"], "id
       () => post(`/api/tickets/${ticket.id}/merge-branch`, { confirm: true }),
       (r) => `Branch merged into ${config.base_branch}; ticket closed${(r as { back_on?: string }).back_on ? `, checkout on ${(r as { back_on: string }).back_on}` : ""}`,
     );
-    if (ok) setOpen(false);
+    if (ok) {
+      setOpen(false);
+      // this button disappears with the ticket's review state, so the push offer lives elsewhere (Shell)
+      window.dispatchEvent(new Event(MERGED_EVENT));
+    }
   };
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>

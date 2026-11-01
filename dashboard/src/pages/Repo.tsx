@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { FlaskConical, Trash2, Undo2 } from "lucide-react"
 import { DiffView } from "@/components/DiffView"
+import { PushPanel } from "@/components/PushPanel"
 import { PageHeader } from "@/components/PageHeader"
 import { Lamp } from "@/components/Lamp"
 import { Button } from "@/components/ui/button"
@@ -36,8 +37,13 @@ export function Repo() {
         {removable.length > 0 && (
           <Button size="sm" variant="outline" disabled={pending || !!locked} onClick={() => act(() => post("/api/repo/cleanup", {}), `${removable.length} ${removable.length === 1 ? "branch" : "branches"} deleted`)} leftIcon={<Trash2 />}>Delete {removable.length} merged {removable.length === 1 ? "branch" : "branches"}</Button>
         )}
+        {r.clones > 0 && (
+          <Button size="sm" variant="outline" disabled={pending || !!locked} title="Throwaway copies of the project that agents left in workspaces/" onClick={() => act(() => post("/api/repo/cleanup", { names: [], clones: true }), `${r.clones} ${r.clones === 1 ? "clone" : "clones"} removed`)} leftIcon={<Trash2 />}>Remove {r.clones} leftover {r.clones === 1 ? "clone" : "clones"}</Button>
+        )}
         {locked && <span className="text-[13px] text-muted-foreground">{locked}</span>}
       </div>
+
+      <div className="mb-8"><PushPanel quiet /></div>
 
       <section className="grid divide-y border-y bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x [&>div]:p-4" aria-label="Checkout state">
         <div>

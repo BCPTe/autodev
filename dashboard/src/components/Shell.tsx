@@ -1,3 +1,4 @@
+import { PushAfterMerge } from "@/components/PushAfterMerge";
 import { useState, useSyncExternalStore } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, CircleDollarSign, GitBranch, GitPullRequest, LayoutDashboard, ChevronDown, Lightbulb, LogOut, Menu, Moon, RotateCw, Settings, Sun, Ticket } from "lucide-react";
@@ -171,7 +172,7 @@ function ProjectSwitch() {
     <div className="mx-3 mb-3 mt-2">
       <p className="px-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Project</p>
       <Select
-        value={current ?? data.default}
+        value={current ?? data.default ?? undefined}
         onValueChange={(v) => {
           setProject(v);
           window.location.assign("/");
@@ -309,6 +310,7 @@ export function Shell() {
           <main className="px-4 py-6 sm:px-8 sm:py-8">
             <div key={pathname} className="page-in">
               <Outlet />
+              <PushAfterMerge />
             </div>
           </main>
         </div>

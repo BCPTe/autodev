@@ -35,7 +35,7 @@ export function storedProject(): string | null {
 
 /** /api/overview -> /api/p/<project>/overview; auth and project-list calls stay global. */
 export function scoped(path: string): string {
-  if (!currentProject || !path.startsWith("/api/") || path.startsWith("/api/auth/") || path.startsWith("/api/projects") || path.startsWith("/api/p/")) return path
+  if (!currentProject || !path.startsWith("/api/") || path.startsWith("/api/auth/") || path.startsWith("/api/setup/") || path.startsWith("/api/projects") || path.startsWith("/api/p/")) return path
   return `/api/p/${encodeURIComponent(currentProject)}/${path.slice("/api/".length)}`
 }
 
@@ -125,6 +125,25 @@ export interface Ticket {
   updated_at: string | null
   body?: string
   last_run?: { kind: string; status: string; outcome: string | null; started_at: number } | null
+}
+
+export interface PushPlan {
+  base: string
+  target: string | null
+  can_push: boolean
+  reason: string | null
+  own_count?: number
+  ticket_id?: string | null
+  commits: { sha: string; subject: string; autodev: boolean }[]
+}
+
+export interface AttachmentInfo {
+  name: string
+  saved: string | null
+  type: string
+  external: boolean
+  url: string | null
+  inline: boolean
 }
 
 export interface Comment {
@@ -247,6 +266,7 @@ export interface RepoState {
   ahead: number | null
   behind: number | null
   busy: boolean
+  clones: number
   branches: { name: string; merged: boolean; current: boolean; last_commit: string; updated: string; ahead: number }[]
   commits: { sha: string; subject: string }[]
 }

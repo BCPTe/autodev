@@ -34,7 +34,7 @@ export function Login({ setupRequired, onDone }: { setupRequired: boolean; onDon
       await post(setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired ? { password, code: code.trim() } : { password })
       onDone()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Server unreachable. Check that `autodev serve` is running.")
+      setError(err instanceof ApiError ? err.message : "Server unreachable. Check that `autodev` is running.")
     } finally {
       setBusy(false)
     }
@@ -47,7 +47,7 @@ export function Login({ setupRequired, onDone }: { setupRequired: boolean; onDon
         <h1 className="text-3xl font-semibold">{setupRequired ? "First setup" : "Sign in to autodev"}</h1>
         <p className="mb-6 mt-1 text-muted-foreground">
           {setupRequired
-            ? "Choose the dashboard password. The setup code is printed in the terminal where you started `autodev serve`."
+            ? "Choose the dashboard password. The setup code is printed in the terminal where you started `autodev`."
             : "The dashboard is local to this computer."}
         </p>
 
