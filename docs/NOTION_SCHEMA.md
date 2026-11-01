@@ -46,7 +46,7 @@ One database, "Ticket". Humans fill the **Intake** properties, the orchestrator 
 | New | you | Waiting for triage (needs "Authorized") |
 | Needs info | autodev | Ticket too vague; answer, then set back to New |
 | Analysed | autodev | Triage says "ready"; waiting for your go-ahead |
-| In progress | you | Your approval; `autodev fix` picks it up |
+| In progress | you | Your approval; the engine picks it up |
 | In review | autodev | Fix verified; a PR (or local branch) awaits your review |
 | Needs a human | autodev | Something failed; needs you |
 | Closed | you (or autodev) | Done, not reproducible or duplicate; reason in "Agent notes" |

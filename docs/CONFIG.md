@@ -2,14 +2,14 @@
 
 Everything project-specific lives in `projects/<name>.yaml` plus two secrets in `.env`. The code knows nothing about any particular project. `projects/example.yaml.dist` is a commented template (copy it to `projects/<name>.yaml`; `.dist` files are ignored by autodev); `projects/sandbox.yaml.dist` is a small working one.
 
-To check what you wrote: `uv run autodev check` (Notion reachable? columns present? GitHub token usable?).
+To check what you wrote: `GET /api/setup-check` (Notion reachable? columns present? GitHub token usable?).
 
 ## 1. Secrets (`.env`, never committed)
 
 | Variable | Where to get it |
 |---|---|
 | `NOTION_TOKEN` | notion.so/profile/integrations → **New integration** (internal) → copy the *Internal Integration Secret*. Then open your ticket database in Notion → `···` menu → **Connections** → add the integration, otherwise every call returns 404. The integration needs *read content*, *update content* and *insert comments*. |
-| `GITHUB_TOKEN` | github.com → Settings → Developer settings → Personal access tokens → **Fine-grained**. Resource owner: the owner of the repo (an organization may need to approve it). Repository access: only that repo. Permissions: *Pull requests* read and write, *Contents* read and write (push, delete merged branches), *Commit statuses* read (CI state on the PR page: Vercel and most external CI report there) and, optionally, *Actions* read (GitHub Actions results). There is no "Checks" permission for fine-grained tokens, *Metadata* read. Only needed when `pr.create` is on or you use the PR page. Without *Contents* GitHub answers "422 Unprocessable Entity" when a PR is opened (`autodev check` now tells you). |
+| `GITHUB_TOKEN` | The default GitHub token. A project on another GitHub account names its own variable with `pr.token_env` (the setup wizard does this: `GITHUB_TOKEN_<PROJECT>`), used for the API and for git over https. github.com → Settings → Developer settings → Personal access tokens → **Fine-grained**. Resource owner: the owner of the repo (an organization may need to approve it). Repository access: only that repo. Permissions: *Pull requests* read and write, *Contents* read and write (push, delete merged branches), *Commit statuses* read (CI state on the PR page: Vercel and most external CI report there) and, optionally, *Actions* read (GitHub Actions results). There is no "Checks" permission for fine-grained tokens, *Metadata* read. Only needed when `pr.create` is on or you use the PR page. Without *Contents* GitHub answers "422 Unprocessable Entity" when a PR is opened (the setup check tells you). |
 | Claude | No key. The agents use the Claude Code login of the user running autodev (`claude` once in a terminal to log in). |
 
 `git push` itself uses your normal git credentials (SSH key or credential helper), not the token.

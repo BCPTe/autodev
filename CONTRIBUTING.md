@@ -20,7 +20,7 @@ cd dashboard && npx tsc -b && npm run lint && npm run build
 
 ## Working on the dashboard
 
-`uv run autodev serve --dev` runs the API with the Vite dev server (hot reload). To see the UI with fake data and no credentials:
+`uv run autodev --dev` runs the API with the Vite dev server (hot reload). To see the UI with fake data and no credentials:
 
 ```
 uv run python e2e/autodev/demo_server.py 8799 /tmp/autodev-demo.db

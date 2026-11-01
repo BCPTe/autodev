@@ -3,9 +3,9 @@
 Ordered by what unblocks the most. Done items live in git history, not here.
 
 ## Next
-0. **Dashboard** ([DASHBOARD_PLAN.md](DASHBOARD_PLAN.md)): all five phases done. Left over: chat with finished runs (resume session); agent plan checkpoint before edits; browser tests for the dashboard (`e2e/autodev`, on `demo_server.py`); GitHub features (PR list, merge, housekeeping) and `notify-send` untested against the real services; Windows/macOS notifiers need a custom `notify_command`.
+0. **Dashboard** ([DASHBOARD_PLAN.md](DASHBOARD_PLAN.md)): all five phases done. Left over: chat with finished runs (resume session); agent plan checkpoint before edits; GitHub features (PR list, merge, housekeeping) and `notify-send` untested against the real services; Windows/macOS notifiers need a custom `notify_command`.
 1. **Pull requests.** (enabled; first real PR pending) `GITHUB_TOKEN` in `.env`, `pr.create: true`, state `In review` links the PR. Replaces the manual merge into `staging`. Includes updating an already open PR when a ticket is re-run (done in `github.py`, untested against the real API).
-2. **`autodev run`.** Polling loop (triage then fix) with a lock, a **daily spend cap** (the per-ticket cap of $6 exists, the daily one does not), quiet hours, and a `systemd --user` service.
+2. **Browser tests for the dashboard.** Playwright against `e2e/autodev/demo_server.py` (fake data, no Notion or agents), since the dashboard is the only interface. Cover the mode switch (auto / supervised / manual / paused), Start / Stop, approving a ticket, a checkpoint and a permission request, the live run view, Settings overrides and the pull requests page. Run in CI.
 3. **Merge conflicts resolved by the agent.** When the base branch moved and merging it into the ticket branch conflicts (as happened on `scia_sue_calabria_fields.json`), hand both versions to the fix agent in the same run instead of stopping.
 
 ## Learning loop (phase 1 done: playbook file, injection, retrospective proposals, Learnings page, usage and per-area metrics)
@@ -14,6 +14,8 @@ Ordered by what unblocks the most. Done items live in git history, not here.
 - Untested against the real services: the retrospective with the real Claude API, `git diff --stat` on a real merged/deleted branch, and the auto trigger from a real GitHub merge.
 
 ## Later
+- **Triage evals in the dashboard.** `evals.py` (build cases from closed tickets, replay triage, score, compare with the previous report) has no entry point since the CLI went away. Add a page next to Learnings: build cases, run with model / limit / label as a tracked job, results table and comparison, and a way to edit the prompts being measured.
+- **Always-on loop.** The automatic loop (`Engine.run_forever`: housekeeping, triage, fix, daily cap, quiet hours, `my_turn` lock) already runs inside `autodev`. A headless `autodev run` is not needed; to keep it on after login, run `autodev` as a `systemd --user` service.
 4. **CI on GitHub for the target repo** (pytest, vitest, tsc on every PR) so PRs carry checks that do not depend on the agent.
 6. **Notion views.** Inbox (New + Authorized), In review, Needs info, Closed.
 7. **Automatic UI check.** With in-place mode the Docker stack already serves the ticket branch, so Playwright (an end-to-end suite in the target repo) can run against `localhost:3000` as part of verification for changes that touch the frontend.

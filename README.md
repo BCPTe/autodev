@@ -50,13 +50,15 @@ Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 20+ (dashboard), `git`,
 | Agent notes | Text | autodev |
 | Verification result | Select | autodev |
 
+The setup wizard builds this database for you and names the columns autodev fills in `autodev · Risk`, `autodev · Branch`, and so on, so it is clear which are not yours (Notion has no read-only columns); it writes those names under `tracker.properties` in the project file. If you create the database by hand, the plain names above work as they are.
+
    The ticket description is the page body; people answer questions as page comments.
 3. Put the Notion `database_id` / `data_source_id` and the status labels in `projects/<name>.yaml`.
-4. `uv run autodev check` verifies the connection and the columns.
+4. Start the dashboard: `GET /api/setup-check` verifies the connection and the columns (a setup wizard will replace this).
 
 ## Dashboard and autonomy
 
-`cd dashboard && npm install && npm run build`, then `uv run autodev serve` (127.0.0.1:8765, password set on first visit). From the top bar you choose how much autodev does alone:
+`cd dashboard && npm install && npm run build`, then `uv run autodev` (127.0.0.1:8765, password set on first visit). From the top bar you choose how much autodev does alone:
 
 | Mode | Behaviour |
 |---|---|
@@ -69,7 +71,7 @@ Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node 20+ (dashboard), `git`,
 
 ### Talking to the agents
 
-Runs started from the dashboard are interactive (runs started with `autodev triage|fix` in a terminal are not):
+Runs started from the dashboard are interactive:
 - **Message:** writing to a running agent interrupts what it is doing and gives it your text as the next turn, keeping its whole context. **Pause** interrupts and waits for your next message.
 - **Permissions:** `autonomy.permission_policy` (also in Settings, where **Reset to project file** brings back the values of the YAML; see [docs/CONFIG.md](docs/CONFIG.md)) is `ask` (every command outside `allowed_bash` waits for you) or `trusted` (ordinary commands run; destructive ones such as `rm -rf`, `git push`, `sudo`, `.env`/`~/.ssh` access and writes outside the project always wait, and are refused in Auto mode). Switching between Manual and Supervised does not change this. A waiting request shows up under "Needs your attention": allow once, allow this program for the run (never a destructive use), stop asking for ordinary commands, or deny with a reason the agent reads.
 - **Checkpoints** (`autonomy.checkpoints`, not applied in Auto): `after_agent` waits after the agent says it is done and before the verification gate; `before_pr` waits after verification and before the push and the pull request. Rejecting escalates the ticket.
@@ -85,7 +87,7 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 
 - **Repo:** the checkout's state, the agent branches with a file-by-file diff, "Try" (switch to a branch to test it with Docker), "Back to <base>", and **Run the checks** (the project's `checks` as a tracked run). Switching branches and deleting are refused while an agent works or when the tree is dirty.
 - **Pull request:** autodev's PRs with GitHub check status, the ticket's risk and verification, and the PR description with the evidence. **Merge** (squash) needs a second click and is refused for drafts, failing or pending checks, conflicts and High risk; a merge closes the ticket and deletes the remote branch.
-- Branches whose PR was merged (even squashed) count as merged. `uv run autodev cleanup [--dry-run] [--remote] [--workspaces]` deletes them from the terminal; unmerged branches are never removed.
+- Branches whose PR was merged (even squashed) count as merged. The Repo page deletes them (also on GitHub) and removes leftover clones in `workspaces/`; unmerged branches are never removed.
 
 ### Running unattended
 
@@ -93,19 +95,18 @@ Runs started from the dashboard are interactive (runs started with `autodev tria
 - **Notifications:** a desktop notification (via `notify-send`, or `autonomy.notify_command` with `{title}` and `{body}`) when a request or checkpoint waits for you, a run finishes or fails, the daily cap is reached or a PR is merged. The browser tab title shows the number of pending requests, and optional browser notifications work while the tab is open in the background.
 - **Housekeeping:** every polling round a merged PR closes its ticket and a PR closed unmerged escalates it (`autonomy.auto_cleanup_branches: true` also deletes the merged local branch).
 - **Costs:** every agent session records its tokens (input, output, cache read/write), cost, turns and tool calls; the Costs page breaks them down by stage and model, area and outcome. Agents run without the Claude account's MCP connectors and personal memory (`agents.*.user_mcp`), which had been ~2/3 of the spend. See [docs/COSTS.md](docs/COSTS.md).
-- **Several projects:** `uv run autodev serve` serves every file in `projects/` (or the ones named with `--project`, repeatable). A project switcher appears in the sidebar; mode, daily cap, quiet hours, runs and costs are per project, and each project's agent works on its own checkout.
+- **Several projects:** `uv run autodev` serves every file in `projects/` (or the ones named with `--project`, repeatable). A project switcher appears in the sidebar; mode, daily cap, quiet hours, runs and costs are per project, and each project's agent works on its own checkout.
 
-### Measuring triage (`autodev eval`)
+### Measuring triage
 
-- `uv run autodev eval build` collects a case for every ticket in review or closed whose branch is still in the checkout: the ticket with its human comments, the commit the fix started from, and the source files it changed (tests excluded). Cases live in `data/evals/<project>/cases.jsonl`.
-- `uv run autodev eval run [--model M] [--limit N] [--label "prompt v2"]` triages each case on a temporary worktree at that commit (the bug is still there) and scores: verdict, recall and precision of `suspected_files` against the files the fix changed, whether "What I understood" was filled, cost and turns. The report is saved next to the cases and compared with the previous run, so a prompt change is judged on numbers.
+`src/autodev/evals.py` replays triage on tickets already fixed and scores it (verdict, recall and precision of `suspected_files` against the files the fix changed, cost, turns), so a prompt change is judged on numbers. It no longer has a command; a dashboard page is planned (see [docs/BACKLOG.md](docs/BACKLOG.md)).
 
 ## Layout
 
 ```
 src/autodev/   orchestrator (trackers, agents, sandbox, pipeline, github, knowledge playbook, report)
 e2e/           demo server with fake data for UI work and screenshots
-dashboard/     React + Vite web UI, built to static files served by `autodev serve`
+dashboard/     React + Vite web UI, built to static files served by `autodev`
 tests/         pytest suite (fixtures in tests/fixtures)
 projects/      per-project configuration (your own files are git-ignored)
 docs/          design notes, Notion schema

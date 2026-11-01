@@ -186,10 +186,35 @@ def fake_agents() -> None:
     engine_mod.triage_ticket, engine_mod.fix_ticket = triage, fix
 
 
+def local_only_project(root: Path, db: Database) -> Ctx:
+    """A project without pull requests: one ticket in review whose branch is on this machine only.
+
+    Merging it ("Merge branch") and then pushing shows the whole path. One commit of the user is already on main
+    and not on origin, so the push list has a "yours" row ahead of the autodev one.
+    """
+    cfg = make_project(root)
+    git(cfg.local_path, "fetch", "-q")
+    work = Path(cfg.local_path)
+    (work / "notes.txt").write_text("my own work, not pushed yet\n")
+    git(work, "add", "notes.txt")
+    git(work, "commit", "-qm", "wip: notes for later")
+    git(work, "checkout", "-q", "-b", "autodev/discount-wrong-ab12cd")
+    (work / "shop" / "pricing.py").write_text("def apply_discount(price: float, percent: float) -> float:\n    return price * (1 - percent / 100)\n")
+    git(work, "commit", "-qam", "fix: The discount takes off 10 euros instead of 10%\n\nTicket: https://notion.so/t1")
+    git(work, "checkout", "-q", "main")
+    tracker = FakeTracker()
+    tracker._t = [Ticket(
+        id="t1", title="The discount takes off 10 euros instead of 10%", status=Status.REVIEW, url="https://notion.so/t1",
+        updated_at="2026-10-21T10:00:00+00:00", area="Pricing", risk="Low", attempts=1, cost_usd=0.4, branch="autodev/discount-wrong-ab12cd", verification="Passed",
+    )]
+    return Ctx(cfg, "local-only", db, tracker, Engine(cfg, "local-only", db, tracker))
+
+
 def main() -> None:
     port, db_path = int(sys.argv[1]), sys.argv[2]
     dev = "--dev" in sys.argv[3:]
-    Path(db_path).unlink(missing_ok=True)
+    for leftover in (db_path, f"{db_path}-wal", f"{db_path}-shm"):  # SQLite's side files too, or a killed run leaves the next one unable to open it
+        Path(leftover).unlink(missing_ok=True)
     db = Database(db_path)
     root = Path(tempfile.mkdtemp(prefix="autodev-demo-"))
     cfg = make_project(root)
@@ -224,7 +249,8 @@ def main() -> None:
     other_tracker = FakeTracker()
     other_tracker._t = other_tracker._t[:3]
     other = Ctx(other_cfg, "gestionale", db, other_tracker, Engine(other_cfg, "gestionale", db, other_tracker))
-    app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker), others=[other])
+    local = local_only_project(Path(tempfile.mkdtemp(prefix="autodev-demo-nopr-")), db)
+    app = create_app(cfg, "demo", db, tracker, engine=Engine(cfg, "demo", db, tracker), others=[other, local])
     print(f"SETUP_CODE={app.state.auth.setup_code}", flush=True)
 
     threading.Thread(target=lambda: asyncio.run(feed(db, live)), daemon=True).start()
